@@ -1,0 +1,7 @@
+requests
+Pillow
+numpy
+google-api-python-client
+google-auth
+google-auth-httplib2
+kaggle

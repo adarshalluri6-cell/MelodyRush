@@ -1,0 +1,8 @@
+client_secret*.json
+.env
+output/
+kaggle_job/
+fonts/
+__pycache__/
+*.mp4
+*.wav
