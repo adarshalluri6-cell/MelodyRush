@@ -51,7 +51,7 @@ jobs:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
-          CHANNEL_NAME: "Your Channel Name"
+          CHANNEL_NAME: "MelodyRush"
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: python main.py
 
