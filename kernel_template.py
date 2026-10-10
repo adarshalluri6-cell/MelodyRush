@@ -60,7 +60,7 @@ def main():
         sh("uv sync", cwd=REPO)
         (REPO / "job.json").write_text(json.dumps(JOB))
         (REPO / "inner.py").write_text(INNER)
-        sh("uv run python inner.py", cwd=REPO)
+        sh("ACESTEP_DTYPE=float32 uv run python inner.py", cwd=REPO)
         raw = newest_audio()
         if not raw:
             raise RuntimeError("no audio file was produced")

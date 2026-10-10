@@ -131,15 +131,21 @@ def _gemini(prompt):
         raise RuntimeError("no GEMINI_API_KEY")
     models = [os.getenv("GEMINI_MODEL", "gemini-3.8-flash"), "gemini-flash-latest", "gemini-2.5-flash"]
     last = ""
-    for m in dict.fromkeys(models):
-        r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
-                          headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-                          json={"contents": [{"parts": [{"text": prompt}]}],
-                                "generationConfig": {"temperature": 1.0}}, timeout=120)
-        if r.ok:
-            return r.json()["candidates"][0]["content"]["parts"][0]["text"]
-        last = f"{m}: {r.status_code} {r.text[:160]}"
-        print("[llm] gemini", last)
+    for attempt in range(2):
+        for m in dict.fromkeys(models):
+            try:
+                r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
+                                  headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+                                  json={"contents": [{"parts": [{"text": prompt}]}],
+                                        "generationConfig": {"temperature": 1.0}}, timeout=75)
+            except Exception as e:
+                last = f"{m}: {type(e).__name__}"
+                print("[llm] gemini", last)
+                continue
+            if r.ok:
+                return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            last = f"{m}: {r.status_code} {r.text[:160]}"
+            print("[llm] gemini", last)
     raise RuntimeError(last)
 
 
