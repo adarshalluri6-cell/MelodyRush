@@ -11,7 +11,7 @@ import requests
 
 DATA = Path(os.getenv("DATA_DIR", "data"))
 HISTORY_FILE = DATA / "history.json"
-CHANNEL_NAME = os.getenv("CHANNEL_NAME", "Your Channel Name")
+CHANNEL_NAME = os.getenv("CHANNEL_NAME", "MelodyRush")
 
 # Fictional singers. Edit freely. Check that the names are not real artists before launching.
 PERSONAS = [
