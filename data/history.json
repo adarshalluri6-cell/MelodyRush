@@ -7,10 +7,25 @@
       "genre": "dance pop",
       "hook": "bold statement",
       "title": "Some mistakes are worth repeating: Before We Crash (Lyrics)",
-      "duration": 182
+      "duration": 182,
+      "metrics": {
+        "views": 36,
+        "likes": 2,
+        "comments": 1
+      }
+    },
+    {
+      "id": "tC5DfWUIrJM",
+      "date": "2026-10-10T21:04:37.520855+00:00",
+      "persona": "nova",
+      "genre": "pop punk",
+      "hook": "story tease",
+      "title": "She caught him lying and did this instead... (Lyrics)",
+      "duration": 172
     }
   ],
   "playlists": {
-    "luna": "PLeaSXpSe_hVM"
+    "luna": "PLeaSXpSe_hVM",
+    "nova": "PLAqJptfkQLMY"
   }
 }
