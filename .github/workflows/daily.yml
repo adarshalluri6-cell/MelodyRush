@@ -1,46 +1,44 @@
 name: Make and upload song video
-
+ 
 on:
-  # TURN ON THE SCHEDULE ONLY AFTER A SUCCESSFUL TEST RUN:
-  # remove the "#" at the start of the 3 lines below, then commit.
-  # schedule:
-  #   - cron: "30 14 * * *"   # runs 10:30 AM New York, uploads about 11:15 AM
-  #   - cron: "30 20 * * *"   # runs  4:30 PM New York, uploads about  5:15 PM
+  schedule:
+    - cron: "30 14 * * *"   # about 10:30 AM New York, uploads about 11 AM
+    - cron: "30 20 * * *"   # about  4:30 PM New York, uploads about  5 PM
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "TICK = test only (NO upload). UNTICK to upload for real."
+        description: "TICK = test only (NO upload). UNTICK to upload for real. (Scheduled runs always upload.)"
         type: boolean
         default: true
-
+ 
 permissions:
   contents: write
-
+ 
 concurrency:
   group: song-pipeline
   cancel-in-progress: false
-
+ 
 jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
-
+ 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
+ 
       - name: Install FFmpeg and fonts
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core
           mkdir -p fonts
           curl -L -o fonts/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf || true
-
+ 
       - name: Install Python packages
         run: pip install -r requirements.txt
-
+ 
       - name: Make the song video
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
@@ -54,7 +52,7 @@ jobs:
           CHANNEL_NAME: "MelodyRush"
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: python main.py
-
+ 
       - name: Save learning data
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
@@ -63,7 +61,7 @@ jobs:
           git add data/history.json
           git commit -m "Update performance history" || echo "nothing to commit"
           git push || echo "push skipped"
-
+ 
       - name: Save test files
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -75,3 +73,8 @@ jobs:
             output/plan.json
             output/description.txt
           retention-days: 3
+ 
+
+
+
+
