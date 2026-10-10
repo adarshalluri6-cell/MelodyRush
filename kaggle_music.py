@@ -73,4 +73,5 @@ def _download(ref, outdir, run_id):
             log("---- Kaggle log (tail) ----\n" + lg.read_text(errors="ignore")[-3000:])
         raise RuntimeError("Song generation failed on Kaggle: " + str(meta.get("error", ""))[-800:])
     segs = json.loads((d / "segments.json").read_text()) if (d / "segments.json").exists() else []
-    return {"audio": str(d / meta["audio"]), "segments": segs}
+    img = d / "singer.jpg"
+    return {"audio": str(d / meta["audio"]), "segments": segs, "image": str(img) if img.exists() else None}

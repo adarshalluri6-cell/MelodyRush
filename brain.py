@@ -15,20 +15,20 @@ CHANNEL_NAME = os.getenv("CHANNEL_NAME", "Your Channel Name")
 
 # Fictional singers. Edit freely. Check that the names are not real artists before launching.
 PERSONAS = [
-    {"id": "mira", "name": "Mira Vale", "voice": "warm airy female vocal",
-     "look": "young woman, long wavy auburn hair, freckles, vintage denim jacket, golden hour light",
+    {"id": "mira", "name": "Mira Vale", "voice": "warm airy female vocal", "seed": 1101,
+     "look": "beautiful American woman in her mid 20s, long wavy honey-blonde hair, blue-green eyes, natural freckles, warm smile, vintage denim jacket",
      "genres": ["indie pop", "acoustic pop", "dream pop"]},
-    {"id": "kai", "name": "Kai Monroe", "voice": "smooth soulful male tenor vocal",
-     "look": "young man, short curly black hair, round gold glasses, cream oversized knit sweater",
+    {"id": "kai", "name": "Kai Monroe", "voice": "smooth soulful male tenor vocal", "seed": 2202,
+     "look": "handsome African American man in his late 20s, fresh fade haircut, neat short beard, warm brown eyes, cream knit sweater, gold chain",
      "genres": ["r&b", "soul pop", "chill pop"]},
-    {"id": "luna", "name": "Luna Reyes", "voice": "powerful emotional female pop vocal",
-     "look": "woman, sleek silver-blue bob haircut, glossy lips, metallic jacket, neon city glow",
+    {"id": "luna", "name": "Luna Reyes", "voice": "powerful emotional female pop vocal", "seed": 3303,
+     "look": "gorgeous Latina American woman in her mid 20s, long dark wavy hair, glossy lips, gold hoop earrings, black leather jacket",
      "genres": ["synth pop", "dance pop", "electropop"]},
-    {"id": "jax", "name": "Jax Calloway", "voice": "raspy heartfelt male vocal",
-     "look": "man with stubble beard, worn leather jacket, acoustic guitar, sunset backlight",
+    {"id": "jax", "name": "Jax Calloway", "voice": "raspy heartfelt male vocal", "seed": 4404,
+     "look": "rugged handsome American man in his late 20s, dark blond hair, light stubble, blue eyes, worn brown leather jacket",
      "genres": ["country pop", "folk pop", "pop rock"]},
-    {"id": "nova", "name": "Nova Hart", "voice": "bright dynamic gender-neutral vocal",
-     "look": "singer with shaggy platinum hair, glitter makeup, star earrings, colorful stage lights",
+    {"id": "nova", "name": "Nova Hart", "voice": "bright dynamic vocal", "seed": 5505,
+     "look": "stylish young American singer in early 20s, platinum blonde shaggy hair, bold eyeliner, glitter makeup, star earrings",
      "genres": ["alt pop", "bedroom pop", "pop punk"]},
 ]
 HOOKS = ["emotional confession", "curiosity question", "bold statement", "relatable moment", "story tease"]
@@ -194,7 +194,7 @@ Return ONLY a JSON object with these keys:
 "cta_question": one fun question that makes viewers comment (about their own life, related to the song).
 "tags": array of 15 search tags (mix of broad and specific).
 "hashtags": array of 3 hashtags.
-"scene_prompts": array of 6 image descriptions of the singer in different scenes that match the song (first one is an emotional close-up of the face, no text, no logos)."""
+"image_prompt": ONE vivid description of the singer for the video cover picture: emotion on the face, outfit details, setting, time of day, lighting and colors that match the song mood. The singer must be on the right side of the frame with empty space on the left. No text, no logos, no other people."""
 
 
 def fallback_plan(persona, genre, hook):
@@ -214,9 +214,7 @@ def fallback_plan(persona, genre, hook):
             "cta_question": "What song gets you through late nights? Tell me below!",
             "tags": ["new song", genre, "lyrics", "pop songs 2026", "emotional songs", "late night songs"],
             "hashtags": ["#newmusic", "#lyrics", "#popmusic"],
-            "scene_prompts": ["emotional close-up portrait, eyes glistening, city bokeh", "singing on a rooftop at night",
-                              "walking down a neon-lit street in the rain", "sitting by a window with coffee",
-                              "performing on a small stage with warm lights", "standing on a quiet bridge at dawn"]}
+            "image_prompt": "emotional close-up portrait, eyes glistening, singing into a vintage microphone, neon city bokeh at night, teal and magenta lighting"}
 
 
 def make_plan(persona, genre, hook, context):
@@ -230,10 +228,7 @@ def make_plan(persona, genre, hook, context):
     plan["duration"] = max(120, min(210, int(plan["duration"])))
     plan["title"] = re.sub(r"[<>]", "", str(plan["title"]))[:95].strip()
     plan["thumbnail_hook"] = str(plan["thumbnail_hook"]).upper()[:34]
-    scenes = list(plan["scene_prompts"])[:6]
-    while len(scenes) < 6:
-        scenes.append(f["scene_prompts"][len(scenes)])
-    plan["scene_prompts"] = scenes
+    plan["image_prompt"] = str(plan["image_prompt"])[:600]
     plan["lyric_lines"] = [ln.strip() for ln in plan["lyrics"].splitlines() if ln.strip() and not ln.strip().startswith("[")]
     tags, total = [], 0
     for t in plan["tags"]:
@@ -255,3 +250,10 @@ def build_description(plan, persona):
              ", ".join(plan["tags"]), " ".join(plan["hashtags"]), "",
              "Music and vocals are AI-generated. All characters are fictional."]
     return "\n".join(parts)[:4900]
+
+
+def image_prompt_for(persona, plan):
+    return (f"professional photo of {persona['look']}, {plan['image_prompt']}, singing into a microphone, "
+            "subject positioned on the right third of the frame, empty dark space on the left, "
+            "cinematic lighting, 85mm lens, shallow depth of field, sharp focus on the eyes, "
+            "ultra detailed skin and hair, vibrant color grading, no text, no watermark")

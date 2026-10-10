@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 import brain
+import fx
 import media
 
 OUT = Path(os.getenv("WORK_DIR", "output"))
@@ -23,7 +24,9 @@ def log(m):
 def fake_song(path, seconds=40):
     import subprocess
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
-                    f"sine=frequency=330:duration={seconds}", str(path)], check=True)
+                    f"anoisesrc=color=pink:amplitude=0.4:duration={seconds}", "-f", "lavfi", "-i",
+                    f"sine=frequency=220:duration={seconds}", "-filter_complex",
+                    "[0:a]lowpass=f=3000,tremolo=f=2:d=0.8[a];[a][1:a]amix=inputs=2", str(path)], check=True)
 
 
 def main():
@@ -41,7 +44,7 @@ def main():
     log(f"Title: {plan['title']}")
     (OUT / "plan.json").write_text(json.dumps(plan, indent=2), encoding="utf-8")
 
-    segments = []
+    segments, res = [], {}
     if FAKE:
         audio = str(OUT / "song.mp3")
         fake_song(audio)
@@ -50,16 +53,21 @@ def main():
         log("Making the song on Kaggle's free GPU (this takes a while)...")
         res = kaggle_music.generate_song({"run_id": uuid.uuid4().hex, "caption": plan["caption"],
                                           "lyrics": plan["lyrics"], "bpm": plan["bpm"],
-                                          "duration": plan["duration"]}, OUT)
+                                          "duration": plan["duration"],
+                                          "image_prompt": brain.image_prompt_for(persona, plan),
+                                          "seed": persona["seed"]}, OUT)
         audio, segments = res["audio"], res["segments"]
     log(f"Song ready ({len(segments)} vocal segments detected)")
 
-    images = media.make_images(persona, plan["scene_prompts"], OUT)
-    thumb = media.make_thumbnail(images[0], plan["thumbnail_hook"], persona["name"], OUT / "thumbnail.jpg")
+    kaggle_img = res.get("image") if not FAKE else None
+    bg = media.get_singer_image(persona, plan["image_prompt"], kaggle_img, OUT / "singer.jpg")
+    pal = fx.palette_for(persona["id"])
+    thumb = media.make_thumbnail(bg, plan["thumbnail_hook"], persona["name"], OUT / "thumbnail.jpg", brain.CHANNEL_NAME, pal)
     duration = media.probe_duration(audio)
     timed = media.align(plan["lyric_lines"], segments, duration)
     video = OUT / "video.mp4"
-    media.build_video(images, audio, timed, plan["cta_question"], OUT, video)
+    media.build_video(bg, audio, timed, plan["cta_question"], OUT, video, plan["thumbnail_hook"], persona["name"],
+                      plan["song_title"], brain.CHANNEL_NAME, pal)
     description = brain.build_description(plan, persona)
     (OUT / "description.txt").write_text(description, encoding="utf-8")
 

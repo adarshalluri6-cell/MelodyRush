@@ -61,6 +61,48 @@ def newest_audio():
     return max(files, key=lambda f: Path(f).stat().st_mtime) if files else None
 
 
+def make_image():
+    """High-quality portrait with Stable Diffusion XL (free GPU). Falls back silently if anything fails."""
+    try:
+        sh("pip install -q diffusers transformers accelerate safetensors")
+        import numpy as np
+        import torch
+        from PIL import ImageFilter
+        from diffusers import DPMSolverMultistepScheduler, StableDiffusionXLPipeline
+        pipe = None
+        for repo, kw in [("SG161222/RealVisXL_V5.0", {"variant": "fp16"}), ("SG161222/RealVisXL_V5.0", {}),
+                         ("stabilityai/stable-diffusion-xl-base-1.0", {"variant": "fp16"})]:
+            try:
+                pipe = StableDiffusionXLPipeline.from_pretrained(repo, torch_dtype=torch.float16,
+                                                                 use_safetensors=True, **kw)
+                print("image model:", repo, flush=True)
+                break
+            except Exception:
+                traceback.print_exc()
+        if pipe is None:
+            return
+        pipe.to("cuda")
+        pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config, use_karras_sigmas=True)
+        neg = ("text, watermark, logo, signature, blurry, low quality, deformed face, extra fingers, bad hands, "
+               "cartoon, 3d render, oversaturated, cropped head, multiple people")
+        best, best_score = None, -1
+        for i in range(3):
+            gen = torch.Generator("cuda").manual_seed(JOB["seed"] + i)
+            img = pipe(prompt=JOB["image_prompt"], negative_prompt=neg, width=1344, height=768,
+                       num_inference_steps=32, guidance_scale=5.5, generator=gen).images[0]
+            if np.asarray(img).std() < 4:  # black image = half-precision VAE problem
+                pipe.upcast_vae()
+                img = pipe(prompt=JOB["image_prompt"], negative_prompt=neg, width=1344, height=768,
+                           num_inference_steps=32, guidance_scale=5.5, generator=gen).images[0]
+            edges = np.asarray(img.convert("L").filter(ImageFilter.FIND_EDGES), dtype=np.float32).mean()
+            print(f"candidate {i + 1}: sharpness {edges:.1f}", flush=True)
+            if edges > best_score:
+                best, best_score = img, edges
+        best.save(OUT / "singer.jpg", quality=96)
+    except Exception:
+        traceback.print_exc()
+
+
 def main():
     meta = {"run_id": JOB["run_id"], "ok": False}
     mp3 = OUT / "song.mp3"
@@ -100,6 +142,8 @@ def main():
             segments = [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs]
         except Exception:
             traceback.print_exc()
+    if meta["ok"]:
+        make_image()
     (OUT / "segments.json").write_text(json.dumps(segments))
     (OUT / "meta.json").write_text(json.dumps(meta))
     if not meta["ok"]:
