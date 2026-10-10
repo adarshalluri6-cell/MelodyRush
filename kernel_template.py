@@ -21,6 +21,7 @@ def sh(cmd, cwd=None):
 
 INNER = r'''
 import dataclasses, json, os
+import torch
 from huggingface_hub import snapshot_download
 job = json.load(open("job.json"))
 root = os.getcwd()
@@ -32,11 +33,20 @@ from acestep.llm_inference import LLMHandler
 from acestep.inference import GenerationParams, GenerationConfig, generate_music
 dit, llm = AceStepHandler(), LLMHandler()
 dit.initialize_service(project_root=root, config_path="acestep-v15-turbo", device="cuda")
-llm.initialize(checkpoint_dir=ckpt, lm_model_path="acestep-5Hz-lm-1.7B", backend="pt", device="cuda")
+# Kaggle GPUs (T4/P100) break in float16 when lyrics are used. Force full precision.
+for name, val in list(vars(dit).items()):
+    if isinstance(val, torch.nn.Module):
+        val.float()
+        print("float32:", name, flush=True)
+    elif torch.is_tensor(val) and val.is_floating_point():
+        setattr(dit, name, val.float())
+dit.dtype = torch.float32
+print("dtype now:", dit.dtype, "gpu:", torch.cuda.get_device_name(0), flush=True)
 pf = {f.name for f in dataclasses.fields(GenerationParams)}
 print("GenerationParams fields:", sorted(pf), flush=True)
 want = dict(caption=job["caption"], lyrics=job["lyrics"], bpm=job.get("bpm"), duration=job["duration"],
-            vocal_language="en", instrumental=False)
+            vocal_language="en", instrumental=False, thinking=False, use_cot_caption=False,
+            use_cot_language=False, use_cot_metas=False, use_cot_lyrics=False)
 params = GenerationParams(**{k: v for k, v in want.items() if k in pf and v is not None})
 cf = {f.name for f in dataclasses.fields(GenerationConfig)}
 config = GenerationConfig(**{k: v for k, v in dict(batch_size=1, audio_format="flac").items() if k in cf})
@@ -60,7 +70,14 @@ def main():
         sh("uv sync", cwd=REPO)
         (REPO / "job.json").write_text(json.dumps(JOB))
         (REPO / "inner.py").write_text(INNER)
-        sh("ACESTEP_DTYPE=float32 uv run python inner.py", cwd=REPO)
+        patched = 0
+        for f in (REPO / "acestep").rglob("*.py"):
+            t = f.read_text(errors="ignore")
+            if "self.dtype = torch.float16" in t:
+                f.write_text(t.replace("self.dtype = torch.float16", "self.dtype = torch.float32"))
+                patched += 1
+        print("patched files for float32:", patched, flush=True)
+        sh("ACESTEP_DTYPE=float32 CUDA_VISIBLE_DEVICES=0 uv run python inner.py", cwd=REPO)
         raw = newest_audio()
         if not raw:
             raise RuntimeError("no audio file was produced")
