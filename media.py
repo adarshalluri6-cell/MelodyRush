@@ -4,6 +4,7 @@ import math
 import os
 import random
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -31,18 +32,19 @@ def gradient(path, tint):
 
 
 def make_images(persona, scenes, outdir):
-    paths = []
+    paths, good = [], []
     base_seed = random.randint(1, 10**6)
     for i, scene in enumerate(scenes):
         p = Path(outdir) / f"scene{i}.jpg"
         prompt = (f"{persona['look']}, {scene}, cinematic lighting, vibrant saturated colors, sharp focus, "
                   "ultra detailed illustration photo, no text, no watermark, no logo")
         ok = False
-        for attempt in range(3):
+        for attempt in range(5):
             try:
+                time.sleep(6 if i or attempt else 0)  # be gentle with the free service
                 r = requests.get("https://image.pollinations.ai/prompt/" + quote(prompt),
                                  params={"width": 1920, "height": 1080, "nologo": "true",
-                                         "seed": base_seed + i * 13}, timeout=180)
+                                         "seed": base_seed + i * 13 + attempt}, timeout=180)
                 r.raise_for_status()
                 if not r.headers.get("content-type", "").startswith("image"):
                     raise ValueError("not an image")
@@ -58,12 +60,17 @@ def make_images(persona, scenes, outdir):
                 ok = True
                 break
             except Exception as e:
-                log(f"  image {i + 1} attempt {attempt + 1} failed: {type(e).__name__}")
-                time.sleep(4)
-        if not ok:
+                code = getattr(getattr(e, "response", None), "status_code", "")
+                log(f"  image {i + 1} attempt {attempt + 1} failed: {type(e).__name__} {code}")
+                time.sleep(8 * (attempt + 1))
+        if ok:
+            good.append(str(p))
+        elif good:
+            shutil.copy(random.choice(good), p)  # reuse a good picture (zoom makes it look different)
+        else:
             gradient(p, [random.randint(80, 220) for _ in range(3)])
         paths.append(str(p))
-    log(f"Images OK ({len(paths)})")
+    log(f"Images done: {len(good)} generated, {len(paths) - len(good)} reused/fallback")
     return paths
 
 
@@ -121,6 +128,29 @@ def make_thumbnail(img_path, hook, persona_name, out):
 
 
 # ----------------------------- lyric timing ----------------------------------
+def proportional(lines, segs, duration):
+    """Spread lines over the parts of the song where someone is actually singing."""
+    segs = [s for s in segs if s["end"] > s["start"]]
+    total_voc = sum(s["end"] - s["start"] for s in segs)
+    total_chars = sum(len(x) + 8 for x in lines)
+
+    def at(offset):
+        for s in segs:
+            d = s["end"] - s["start"]
+            if offset <= d:
+                return s["start"] + offset
+            offset -= d
+        return segs[-1]["end"]
+    out, c = [], 0
+    for x in lines:
+        c0, c1 = c, c + len(x) + 8
+        c = c1
+        a = at(total_voc * c0 / total_chars)
+        b = at(total_voc * c1 / total_chars)
+        out.append((x, a, min(max(a + 1.0, b - 0.1), a + 7.0)))
+    return out
+
+
 def align(lines, segs, duration):
     norm = lambda s: re.sub(r"[^a-z0-9 ]", "", s.lower())
     n = len(lines)
@@ -138,6 +168,9 @@ def align(lines, segs, duration):
             times[bi] = (s["start"], s["end"])
             j = bi + 1
     known = sum(t is not None for t in times)
+    if known < max(3, n // 4) and len(segs) >= 3:
+        log(f"Lyric timing: matched {known}/{n}; mapping lines onto the {len(segs)} vocal segments")
+        return proportional(lines, segs, duration)
     if known < max(3, n // 4):
         log(f"Lyric timing: only {known}/{n} lines matched, spreading evenly")
         a, b = duration * 0.07, duration * 0.93
@@ -208,7 +241,10 @@ def probe_duration(path):
 
 
 def build_video(images, audio, timed, cta_question, workdir, out):
-    workdir = Path(workdir)
+    workdir = Path(workdir).resolve()
+    audio = str(Path(audio).resolve())
+    out = Path(out).resolve()
+    images = [str(Path(i).resolve()) for i in images]
     duration = probe_duration(audio)
     n = len(images)
     seg = duration / n

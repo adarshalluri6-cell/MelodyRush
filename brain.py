@@ -11,7 +11,7 @@ import requests
 
 DATA = Path(os.getenv("DATA_DIR", "data"))
 HISTORY_FILE = DATA / "history.json"
-CHANNEL_NAME = os.getenv("CHANNEL_NAME", "MelodyRush")
+CHANNEL_NAME = os.getenv("CHANNEL_NAME", "Your Channel Name")
 
 # Fictional singers. Edit freely. Check that the names are not real artists before launching.
 PERSONAS = [
@@ -129,7 +129,7 @@ def _gemini(prompt):
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
         raise RuntimeError("no GEMINI_API_KEY")
-    models = [os.getenv("GEMINI_MODEL", "gemini-3.8-flash"), "gemini-flash-latest", "gemini-2.5-flash"]
+    models = [os.getenv("GEMINI_MODEL", "gemini-3.8-flash"), "gemini-flash-latest"]
     last = ""
     for attempt in range(2):
         for m in dict.fromkeys(models):
@@ -137,7 +137,7 @@ def _gemini(prompt):
                 r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
                                   headers={"x-goog-api-key": key, "Content-Type": "application/json"},
                                   json={"contents": [{"parts": [{"text": prompt}]}],
-                                        "generationConfig": {"temperature": 1.0}}, timeout=75)
+                                        "generationConfig": {"temperature": 1.0}}, timeout=150)
             except Exception as e:
                 last = f"{m}: {type(e).__name__}"
                 print("[llm] gemini", last)

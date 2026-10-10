@@ -52,7 +52,7 @@ def main():
                                           "lyrics": plan["lyrics"], "bpm": plan["bpm"],
                                           "duration": plan["duration"]}, OUT)
         audio, segments = res["audio"], res["segments"]
-    log("Song ready")
+    log(f"Song ready ({len(segments)} vocal segments detected)")
 
     images = media.make_images(persona, plan["scene_prompts"], OUT)
     thumb = media.make_thumbnail(images[0], plan["thumbnail_hook"], persona["name"], OUT / "thumbnail.jpg")
