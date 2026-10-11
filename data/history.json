@@ -9,7 +9,7 @@
       "title": "Some mistakes are worth repeating: Before We Crash (Lyrics)",
       "duration": 182,
       "metrics": {
-        "views": 36,
+        "views": 91,
         "likes": 2,
         "comments": 1
       }
@@ -21,11 +21,26 @@
       "genre": "pop punk",
       "hook": "story tease",
       "title": "She caught him lying and did this instead... (Lyrics)",
-      "duration": 172
+      "duration": 172,
+      "metrics": {
+        "views": 4,
+        "likes": 1,
+        "comments": 2
+      }
+    },
+    {
+      "id": "UTF8J53xu5w",
+      "date": "2026-10-11T15:04:13.853425+00:00",
+      "persona": "jax",
+      "genre": "folk pop",
+      "hook": "curiosity question",
+      "title": "Did We Give Up Too Soon? - Jax Calloway (Lyrics)",
+      "duration": 178
     }
   ],
   "playlists": {
     "luna": "PLeaSXpSe_hVM",
-    "nova": "PLAqJptfkQLMY"
+    "nova": "PLAqJptfkQLMY",
+    "jax": "PLbENCPgliLcs"
   }
 }
