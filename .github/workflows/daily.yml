@@ -2,8 +2,7 @@ name: Make and upload song video
 
 on:
   schedule:
-    - cron: "30 14 * * *"   # about 10:30 AM New York, uploads about 11 AM
-    - cron: "30 20 * * *"   # about  4:30 PM New York, uploads about  5 PM
+    - cron: "0 11 * * *"   # starts 7 AM New York; the video goes live about 9:30-10:30 AM depending on its length
   workflow_dispatch:
     inputs:
       dry_run:
@@ -21,7 +20,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
 
@@ -54,6 +53,8 @@ jobs:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           CHANNEL_NAME: "MelodyRush"
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          MODE: "mix"
+          MAKE_SHORTS: "false"
         run: python main.py
 
       - name: Save learning data
