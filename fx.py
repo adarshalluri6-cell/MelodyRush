@@ -222,3 +222,165 @@ def nowplaying_layer(W, H, brand, singer, song, pal):
     _spaced(d, 92 * s, 41 * s, brand.upper(), f1, (255, 255, 255, 255), 3 * s)
     d.text((54 * s, 74 * s), line2, font=f2, fill=acc + (255,))
     return layer
+
+
+# ============================== brand emblem + animated intro ==============================
+def _ease(x):
+    x = max(0.0, min(1.0, x))
+    return 1 - (1 - x) ** 3
+
+
+def emblem(size, pal, p_disc=1.0, p_lines=1.0):
+    """Half-sun with sound lines under it (our version of a channel logo). Drawn at 2x then reduced."""
+    S = size * 2
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    cx, cy, R = S / 2, S * 0.50, S * 0.30
+    mask = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(mask).pieslice((cx - R, cy - R, cx + R, cy + R), 180, 360, fill=255)
+    top = int(cy - R * p_disc)
+    if p_disc < 1.0:
+        ImageDraw.Draw(mask).rectangle((0, 0, S, top), fill=0)
+    t = np.linspace(0, 1, S, dtype=np.float32)[:, None, None]
+    col = np.array((255, 255, 255), np.float32) * (1 - t) + np.array(pal["light"], np.float32) * t
+    grad = Image.fromarray(np.broadcast_to(col, (S, S, 3)).astype(np.uint8), "RGB")
+    im.paste(grad, (0, 0), mask)
+    d = ImageDraw.Draw(im)
+    for i in range(7):
+        a = max(0.0, min(1.0, p_lines * 8 - i))
+        if a <= 0:
+            continue
+        y = cy + S * 0.035 + i * S * 0.038
+        half = R * (1.25 - i * 0.12)
+        d.rectangle((cx - half, y, cx + half, y + S * 0.011), fill=tuple(pal["rgb"]) + (int(255 * a * (1 - i * 0.09)),))
+    return im.resize((size, size), Image.LANCZOS)
+
+
+def _spaced_layer(text, fnt, fill, spacing, pad=30):
+    tmp = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    w = int(sum(tmp.textlength(c, font=fnt) + spacing for c in text)) + pad * 2
+    h = int(fnt.size * 1.5) + pad
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    x = pad
+    for ch in text:
+        d.text((x, pad // 2), ch, font=fnt, fill=fill)
+        x += tmp.textlength(ch, font=fnt) + spacing
+    return layer
+
+
+def make_intro(path, brand, pal, seconds=4.0, fps=24, w=1920, h=1080):
+    """~4 s channel intro: logo draws in, name fades in, tagline appears. The caller cross-fades it into the video."""
+    yy = np.linspace(0, 1, h, dtype=np.float32)[:, None, None]
+    dark = np.array([8, 8, 14], np.float32)
+    tint = np.array(pal["dark"], np.float32) * 0.16
+    bg = (dark * (1 - yy) + (dark + tint) * yy) * np.ones((h, w, 3), np.float32)
+    xx = np.linspace(-1, 1, w, dtype=np.float32)[None, :, None]
+    bg = bg * (1.0 - 0.35 * (xx ** 2)) + np.array(pal["dark"], np.float32) * 0.05
+    bg_img = np.clip(bg, 0, 255).astype(np.uint8)
+    name_font, tag_font = font("heavy", 78), font("medium", 30)
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(fps),
+           "-i", "-", "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), str(path)]
+    pr = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    total = int(seconds * fps)
+    for f in range(total):
+        t = f / fps
+        base = Image.fromarray(bg_img, "RGB").convert("RGBA")
+        fade_in = _ease(t / 0.5)
+        em = emblem(420, pal, _ease((t - 0.3) / 1.0), _ease((t - 1.0) / 0.9))
+        pulse = 1.0 + 0.035 * np.sin(max(t - 1.8, 0) * 3.0) * min(1.0, max(t - 1.8, 0))
+        if pulse != 1.0:
+            em = em.resize((int(420 * pulse), int(420 * pulse)), Image.LANCZOS)
+        glow = em.filter(ImageFilter.GaussianBlur(22))
+        glow.putalpha(glow.getchannel("A").point(lambda v: int(v * 0.55)))
+        ex, ey = w // 2 - em.width // 2, int(h * 0.30) - em.height // 2 + 40
+        base.alpha_composite(glow, (ex, ey))
+        base.alpha_composite(em, (ex, ey))
+        a_name = _ease((t - 1.6) / 0.8)
+        if a_name > 0:
+            sp = 10 + 22 * (1 - a_name)
+            lay = _spaced_layer(brand.upper(), name_font, (255, 255, 255, 255), sp)
+            lay.putalpha(lay.getchannel("A").point(lambda v, a=a_name: int(v * a)))
+            base.alpha_composite(lay, (w // 2 - lay.width // 2, int(h * 0.62)))
+        a_tag = _ease((t - 2.3) / 0.6)
+        if a_tag > 0:
+            lay = _spaced_layer("NEW SONGS EVERY DAY", tag_font, tuple(pal["rgb"]) + (255,), 9)
+            lay.putalpha(lay.getchannel("A").point(lambda v, a=a_tag: int(v * a)))
+            base.alpha_composite(lay, (w // 2 - lay.width // 2, int(h * 0.62) + 118))
+        frame = np.asarray(base.convert("RGB"), np.float32) * fade_in
+        pr.stdin.write(np.clip(frame, 0, 255).astype(np.uint8).tobytes())
+    pr.stdin.close()
+    pr.wait()
+
+
+def watermark(w, h, pal, size=92):
+    """Small emblem for the top-right corner of the video."""
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    em = emblem(size, pal, 1.0, 1.0)
+    em.putalpha(em.getchannel("A").point(lambda v: int(v * 0.75)))
+    layer.alpha_composite(em, (w - size - 40, 26))
+    return layer
+
+
+def mix_title_layer(W, H, line1, line2, sub, badge, brand, singer, pal):
+    """Premium, consistent thumbnail template: big white line, accent 'MIX 2026' line, boxed sub-tags, duration badge."""
+    s = H / 720.0
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    acc = tuple(pal["rgb"])
+    # brand
+    em = emblem(int(58 * s), pal)
+    layer.alpha_composite(em, (int(44 * s), int(30 * s)))
+    _spaced(d, 112 * s, 44 * s, brand.upper(), font("bold", int(26 * s)), (255, 255, 255, 255), 4 * s)
+    # line 1 (auto-fit, max 2 rows)
+    words, size, rows = line1.upper().split(), 150, []
+    maxw = 640 * s
+    while size > 50:
+        f1 = font("heavy", int(size * s))
+        rows, cur = [], ""
+        for w_ in words:
+            t = (cur + " " + w_).strip()
+            if d.textlength(t, font=f1) <= maxw:
+                cur = t
+            else:
+                if cur:
+                    rows.append(cur)
+                cur = w_
+        if cur:
+            rows.append(cur)
+        if len(rows) <= 2:
+            break
+        size -= 6
+    cap = f1.getbbox("H")[3] - f1.getbbox("H")[1]
+    y = int(150 * s)
+    for r_ in rows:
+        _gradient_text(layer, int(48 * s), y, r_, f1, (255, 255, 255), (214, 220, 232), s)
+        y += int(cap + size * 0.14 * s)
+    # line 2: accent
+    size2 = int(size * 0.78)
+    f2 = font("heavy", int(size2 * s))
+    while d.textlength(line2.upper(), font=f2) > maxw and size2 > 30:
+        size2 -= 4
+        f2 = font("heavy", int(size2 * s))
+    cap2 = f2.getbbox("H")[3] - f2.getbbox("H")[1]
+    _gradient_text(layer, int(48 * s), y, line2.upper(), f2, pal["light"], pal["dark"], s)
+    y += cap2 + int(30 * s)
+    # sub tags with thin lines
+    sf = font("medium", int(21 * s))
+    sw = _spaced_width(d, sub, sf, 3 * s)
+    d.line((50 * s, y, 50 * s + sw, y), fill=(255, 255, 255, 170), width=max(1, int(2 * s)))
+    _spaced(d, 50 * s, y + 10 * s, sub, sf, (255, 255, 255, 235), 3 * s)
+    d.line((50 * s, y + 46 * s, 50 * s + sw, y + 46 * s), fill=(255, 255, 255, 170), width=max(1, int(2 * s)))
+    y += int(66 * s)
+    # duration badge
+    bf = font("bold", int(30 * s))
+    bw = d.textlength(badge, font=bf)
+    x0 = 50 * s
+    d.rounded_rectangle((x0, y, x0 + bw + 78 * s, y + 56 * s), int(28 * s), fill=acc + (255,))
+    cx, cy = x0 + 34 * s, y + 28 * s
+    d.ellipse((cx - 13 * s, cy - 13 * s, cx + 13 * s, cy + 13 * s), outline=(15, 15, 25, 255), width=max(2, int(2.5 * s)))
+    d.line((cx, cy, cx, cy - 8 * s), fill=(15, 15, 25, 255), width=max(2, int(2.5 * s)))
+    d.line((cx, cy, cx + 6 * s, cy + 2 * s), fill=(15, 15, 25, 255), width=max(2, int(2.5 * s)))
+    d.text((x0 + 58 * s, y + 8 * s), badge, font=bf, fill=(15, 15, 25, 255))
+    # singer tag
+    _spaced(d, 52 * s, 640 * s, singer.upper() + "   \u2022   ORIGINAL SONGS", font("medium", int(20 * s)), acc + (255,), 3 * s)
+    return layer

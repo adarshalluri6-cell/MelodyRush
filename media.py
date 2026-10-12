@@ -291,3 +291,30 @@ def build_video(bg, audio, timed, cta_question, workdir, out, hook="NEW SONG", s
         (workdir / f).unlink(missing_ok=True)
     log(f"Video OK ({Path(out).stat().st_size / 1e6:.0f} MB)")
     return duration
+
+
+def make_mix_thumbnail(src, plan, persona_name, out, brand, pal, badge):
+    """Consistent premium template (like the successful mix channels): big words left, portrait right."""
+    img = Image.open(src).convert("RGB")
+    ratio = max(W / img.width, H / img.height)
+    img = img.resize((math.ceil(img.width * ratio), math.ceil(img.height * ratio)), Image.LANCZOS)
+    l, t = (img.width - W) // 2, (img.height - H) // 2
+    img = img.crop((l, t, l + W, t + H))
+    img = ImageEnhance.Color(img).enhance(0.82)
+    img = ImageEnhance.Contrast(img).enhance(1.16)
+    img = ImageEnhance.Sharpness(img).enhance(1.4)
+    shade = np.zeros((H, W, 4), dtype=np.uint8)
+    xx = np.clip(0.86 - np.linspace(0, 0.86 / 0.62, W)[None, :], 0, 0.86)
+    vig = (np.sqrt(((np.linspace(-1, 1, W)[None, :]) ** 2 + (np.linspace(-1, 1, H)[:, None]) ** 2)) / 1.5) ** 2 * 0.35
+    shade[:, :, 3] = (np.clip(xx + vig, 0, 0.9) * 255).astype(np.uint8)
+    shade[:, :, 0], shade[:, :, 1], shade[:, :, 2] = 4, 4, 10
+    img = Image.alpha_composite(img.convert("RGBA"), Image.fromarray(shade, "RGBA"))
+    img = Image.alpha_composite(img, fx.mix_title_layer(W, H, plan["thumbnail_line"], "MIX 2026", plan["thumbnail_sub"],
+                                                        badge, brand, persona_name, pal))
+    img = img.convert("RGB")
+    for q in (95, 90, 82):
+        img.save(out, "JPEG", quality=q, optimize=True)
+        if Path(out).stat().st_size < 1_900_000:
+            break
+    log("Thumbnail OK")
+    return out

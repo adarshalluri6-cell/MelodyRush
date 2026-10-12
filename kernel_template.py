@@ -42,22 +42,34 @@ for name, val in list(vars(dit).items()):
         setattr(dit, name, val.float())
 dit.dtype = torch.float32
 print("dtype now:", dit.dtype, "gpu:", torch.cuda.get_device_name(0), flush=True)
+import time, traceback
+songs = job.get("songs") or [dict(caption=job["caption"], lyrics=job["lyrics"], bpm=job.get("bpm"), duration=job["duration"])]
 pf = {f.name for f in dataclasses.fields(GenerationParams)}
-print("GenerationParams fields:", sorted(pf), flush=True)
-want = dict(caption=job["caption"], lyrics=job["lyrics"], bpm=job.get("bpm"), duration=job["duration"],
-            vocal_language="en", instrumental=False, thinking=False, use_cot_caption=False,
-            use_cot_language=False, use_cot_metas=False, use_cot_lyrics=False)
-params = GenerationParams(**{k: v for k, v in want.items() if k in pf and v is not None})
 cf = {f.name for f in dataclasses.fields(GenerationConfig)}
 config = GenerationConfig(**{k: v for k, v in dict(batch_size=1, audio_format="flac").items() if k in cf})
-os.makedirs("/tmp/ace/out", exist_ok=True)
-result = generate_music(dit, llm, params, config, save_dir="/tmp/ace/out")
-print("success:", getattr(result, "success", None), getattr(result, "error", None), flush=True)
+t0 = time.time()
+for i, s in enumerate(songs):
+    if time.time() - t0 > job.get("budget_min", 170) * 60:
+        print("time budget reached, stopping before song", i + 1, flush=True)
+        break
+    try:
+        outdir = "/tmp/ace/out/%02d" % i
+        os.makedirs(outdir, exist_ok=True)
+        want = dict(caption=s["caption"], lyrics=s["lyrics"], bpm=s.get("bpm"), duration=s["duration"],
+                    vocal_language="en", instrumental=False, thinking=False, use_cot_caption=False,
+                    use_cot_language=False, use_cot_metas=False, use_cot_lyrics=False)
+        params = GenerationParams(**{k: v for k, v in want.items() if k in pf and v is not None})
+        result = generate_music(dit, llm, params, config, save_dir=outdir)
+        print("song", i + 1, "of", len(songs), "success:", getattr(result, "success", None),
+              getattr(result, "error", None), "elapsed", int(time.time() - t0), "s", flush=True)
+    except Exception:
+        traceback.print_exc()
+    torch.cuda.empty_cache()
 '''
 
 
-def newest_audio():
-    files = [f for ext in ("flac", "mp3", "wav") for f in glob.glob(f"/tmp/ace/out/**/*.{ext}", recursive=True)]
+def newest_audio(folder="/tmp/ace/out"):
+    files = [f for ext in ("flac", "mp3", "wav") for f in glob.glob(f"{folder}/**/*.{ext}", recursive=True)]
     return max(files, key=lambda f: Path(f).stat().st_mtime) if files else None
 
 
@@ -99,13 +111,28 @@ def make_image():
             if edges > best_score:
                 best, best_score = img, edges
         best.save(OUT / "singer.jpg", quality=96)
+        if JOB.get("portrait_prompt"):
+            best2, score2 = None, -1
+            for i in range(2):
+                gen = torch.Generator("cuda").manual_seed(JOB["seed"] + 10 + i)
+                img = pipe(prompt=JOB["portrait_prompt"], negative_prompt=neg, width=768, height=1344,
+                           num_inference_steps=32, guidance_scale=5.5, generator=gen).images[0]
+                if np.asarray(img).std() < 4:
+                    pipe.upcast_vae()
+                    img = pipe(prompt=JOB["portrait_prompt"], negative_prompt=neg, width=768, height=1344,
+                               num_inference_steps=32, guidance_scale=5.5, generator=gen).images[0]
+                edges = np.asarray(img.convert("L").filter(ImageFilter.FIND_EDGES), dtype=np.float32).mean()
+                print(f"portrait candidate {i + 1}: sharpness {edges:.1f}", flush=True)
+                if edges > score2:
+                    best2, score2 = img, edges
+            best2.save(OUT / "portrait.jpg", quality=96)
     except Exception:
         traceback.print_exc()
 
 
 def main():
     meta = {"run_id": JOB["run_id"], "ok": False}
-    mp3 = OUT / "song.mp3"
+    n_songs = len(JOB.get("songs") or [1])
     try:
         sh("pip install -q uv huggingface_hub")
         sh(f"git clone --depth 1 https://github.com/ace-step/ACE-Step-1.5.git {REPO}")
@@ -120,31 +147,42 @@ def main():
                 patched += 1
         print("patched files for float32:", patched, flush=True)
         sh("ACESTEP_DTYPE=float32 CUDA_VISIBLE_DEVICES=0 uv run python inner.py", cwd=REPO)
-        raw = newest_audio()
-        if not raw:
+        done = []
+        for i in range(n_songs):
+            raw = newest_audio("/tmp/ace/out/%02d" % i)
+            if not raw:
+                continue
+            mp3 = OUT / f"song_{i:02d}.mp3"
+            try:
+                sh(f'ffmpeg -y -loglevel error -i "{raw}" -b:a 192k "{mp3}"')
+            except Exception:
+                mp3 = OUT / (f"song_{i:02d}" + Path(raw).suffix)
+                shutil.copy(raw, mp3)
+            done.append({"i": i, "file": mp3.name})
+        if not done:
             raise RuntimeError("no audio file was produced")
-        try:
-            sh(f'ffmpeg -y -loglevel error -i "{raw}" -b:a 192k "{mp3}"')
-        except Exception:
-            mp3 = OUT / ("song" + Path(raw).suffix)
-            shutil.copy(raw, mp3)
-        meta.update(ok=True, audio=mp3.name)
+        meta.update(ok=True, songs=done, audio=done[0]["file"])
+        print(f"songs finished: {len(done)} of {n_songs}", flush=True)
     except Exception:
         meta["error"] = traceback.format_exc()[-1500:]
         traceback.print_exc()
-    segments = []
     if meta["ok"]:
         try:
             sh("pip install -q faster-whisper")
             from faster_whisper import WhisperModel
-            model = WhisperModel("small.en", device="cpu", compute_type="int8")
-            segs, _ = model.transcribe(str(mp3), language="en", condition_on_previous_text=False)
-            segments = [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs]
+            model = WhisperModel("small.en" if n_songs == 1 else "base.en", device="cpu", compute_type="int8")
+            for sd in meta["songs"]:
+                try:
+                    segs, _ = model.transcribe(str(OUT / sd["file"]), language="en", condition_on_previous_text=False)
+                    data = [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs]
+                except Exception:
+                    traceback.print_exc()
+                    data = []
+                (OUT / f"segments_{sd['i']:02d}.json").write_text(json.dumps(data))
+                print("lyrics timing done for song", sd["i"] + 1, flush=True)
         except Exception:
             traceback.print_exc()
-    if meta["ok"]:
         make_image()
-    (OUT / "segments.json").write_text(json.dumps(segments))
     (OUT / "meta.json").write_text(json.dumps(meta))
     if not meta["ok"]:
         raise SystemExit(1)

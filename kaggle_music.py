@@ -16,7 +16,7 @@ def _run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
-def generate_song(job, outdir, timeout_min=90):
+def generate_song(job, outdir, timeout_min=300):
     for k in ("KAGGLE_KEY", "KAGGLE_API_TOKEN"):  # ignore secrets that were left empty
         if not os.environ.get(k, "").strip():
             os.environ.pop(k, None)
@@ -72,6 +72,13 @@ def _download(ref, outdir, run_id):
         for lg in d.glob("*.log"):
             log("---- Kaggle log (tail) ----\n" + lg.read_text(errors="ignore")[-3000:])
         raise RuntimeError("Song generation failed on Kaggle: " + str(meta.get("error", ""))[-800:])
-    segs = json.loads((d / "segments.json").read_text()) if (d / "segments.json").exists() else []
-    img = d / "singer.jpg"
-    return {"audio": str(d / meta["audio"]), "segments": segs, "image": str(img) if img.exists() else None}
+    songs = []
+    for sd in meta.get("songs") or []:
+        sf = d / f"segments_{sd['i']:02d}.json"
+        songs.append({"i": sd["i"], "audio": str(d / sd["file"]),
+                      "segments": json.loads(sf.read_text()) if sf.exists() else []})
+    if not songs and meta.get("audio"):
+        songs = [{"i": 0, "audio": str(d / meta["audio"]), "segments": []}]
+    return {"songs": songs, "audio": songs[0]["audio"], "segments": songs[0]["segments"],
+            "image": str(d / "singer.jpg") if (d / "singer.jpg").exists() else None,
+            "portrait": str(d / "portrait.jpg") if (d / "portrait.jpg").exists() else None}

@@ -70,9 +70,12 @@ class YT:
         return [it["snippet"]["topLevelComment"]["snippet"]["textDisplay"] for it in r.get("items", [])]
 
     # ---------------- publishing ----------------
-    def upload(self, video_path, title, description, tags):
+    def upload(self, video_path, title, description, tags, publish_at=None):
         def body(synthetic):
             st = {"privacyStatus": os.getenv("UPLOAD_PRIVACY", "public"), "selfDeclaredMadeForKids": False}
+            if publish_at:
+                st["privacyStatus"] = "private"
+                st["publishAt"] = publish_at
             if synthetic:
                 st["containsSyntheticMedia"] = True
             return {"snippet": {"title": title, "description": description, "tags": tags, "categoryId": "10",
