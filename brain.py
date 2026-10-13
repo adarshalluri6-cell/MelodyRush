@@ -5,6 +5,7 @@ import math
 import os
 import random
 import re
+import time
 from pathlib import Path
 
 import requests
@@ -145,7 +146,8 @@ def _gemini(prompt):
         raise RuntimeError("no GEMINI_API_KEY")
     models = [os.getenv("GEMINI_MODEL", "gemini-3.8-flash"), "gemini-flash-latest"]
     last = ""
-    for attempt in range(2):
+    for attempt in range(4):
+        retry_later = False
         for m in dict.fromkeys(models):
             try:
                 r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
@@ -154,13 +156,47 @@ def _gemini(prompt):
                                         "generationConfig": {"temperature": 1.0}}, timeout=150)
             except Exception as e:
                 last = f"{m}: {type(e).__name__}"
-                print("[llm] gemini", last)
+                retry_later = True
                 continue
             if r.ok:
                 return r.json()["candidates"][0]["content"]["parts"][0]["text"]
-            last = f"{m}: {r.status_code} {r.text[:160]}"
-            print("[llm] gemini", last)
+            last = f"{m}: {r.status_code} {r.text[:120]}"
+            if r.status_code in (429, 500, 502, 503, 504):
+                retry_later = True
+        print("[llm] gemini", last)
+        if not retry_later:
+            break
+        time.sleep(20 * (attempt + 1))
     raise RuntimeError(last)
+
+
+_GROQ_MODEL = {}
+
+
+def _groq_model(key):
+    if _GROQ_MODEL:
+        return _GROQ_MODEL["m"]
+    forced = os.getenv("GROQ_MODEL", "").strip()
+    if forced:
+        _GROQ_MODEL["m"] = forced
+        return forced
+    pick_ = "llama-3.3-70b-versatile"
+    try:
+        r = requests.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"}, timeout=30)
+        ids = [m["id"] for m in r.json().get("data", [])
+               if not any(x in m["id"].lower() for x in ("whisper", "guard", "tts", "playai", "prompt-guard", "distil"))]
+        for pref in ("70b", "120b", "gpt-oss", "llama", "qwen", "kimi"):
+            hit = [i for i in ids if pref in i.lower()]
+            if hit:
+                pick_ = hit[0]
+                break
+        else:
+            pick_ = ids[0] if ids else pick_
+    except Exception:
+        pass
+    print("[llm] groq model:", pick_)
+    _GROQ_MODEL["m"] = pick_
+    return pick_
 
 
 def _groq(prompt):
@@ -169,9 +205,10 @@ def _groq(prompt):
         raise RuntimeError("no GROQ_API_KEY")
     r = requests.post("https://api.groq.com/openai/v1/chat/completions",
                       headers={"Authorization": f"Bearer {key}"},
-                      json={"model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-                            "messages": [{"role": "user", "content": prompt}], "temperature": 1.0},
-                      timeout=120)
+                      json={"model": _groq_model(key), "messages": [{"role": "user", "content": prompt}],
+                            "temperature": 1.0}, timeout=120)
+    if r.status_code == 404:
+        _GROQ_MODEL.clear()
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
 
@@ -417,18 +454,25 @@ def make_mix_plan(persona, genre, hook, context, minutes):
             tags.append(t)
             total += len(t) + 1
     plan["tags"] = tags
-    songs, used, start = [], [], 0
-    while len(songs) < n and start < n + 12:
+    songs, used, fails = [], [], 0
+    while len(songs) < n and fails < 3:
         k = min(5, n - len(songs))
         got = (llm_json(build_songs_prompt(persona, genre, mix_name, len(songs), k, used)) or {}).get("songs") or []
-        good = [c for c in (_clean_song(s, persona, genre) for s in got) if c]
+        good = [c for c in (_clean_song(s, persona, genre) for s in got) if c and c["song_title"] not in used]
         if not good:
-            good = fallback_songs(persona, genre, k, len(songs))
-            print("[plan] song batch fell back to the built-in song")
+            fails += 1
+            print(f"[plan] song batch failed ({fails}/3), waiting before trying again")
+            time.sleep(30)
+            continue
+        fails = 0
         for g in good[:k]:
             songs.append(g)
             used.append(g["song_title"])
-        start += k
+    if len(songs) < 3:
+        print("[plan] too few songs from the AI, adding built-in songs")
+        songs += fallback_songs(persona, genre, 3 - len(songs), len(songs))
+    n = len(songs)
+    plan["n_songs"] = n
     for i, s in enumerate(songs):
         s["lyric_lines"] = [ln.strip() for ln in s["lyrics"].splitlines() if ln.strip() and not ln.strip().startswith("[")]
     plan["songs"] = songs
@@ -454,3 +498,79 @@ def llm_text(prompt):
         except Exception as e:
             print(f"[llm] {fn.__name__} failed: {str(e)[:160]}")
     return None
+
+
+# ============================== ONE SONG, PLAYED FOR ABOUT AN HOUR ==============================
+def build_loop_prompt(persona, genre, hook, context):
+    return f"""You run a YouTube music channel called "{CHANNEL_NAME}" for a US audience (ages 16-34). Create ONE new original English song for the fictional singer {persona['name']} ({persona['voice']}, {persona['gender']}). Genre: {genre}. Title hook style: {hook}.
+The video plays this song for about an hour, made for people who want to leave it on while they study, drive, work or fall asleep, so the song should be catchy, warm and easy to listen to again and again.
+
+{context}
+
+Return ONLY a JSON object with these keys:
+"song_title": 2 to 5 words, memorable, easy to search.
+"caption": comma-separated music tags for the song generator, include genre, mood, instruments, "{persona['voice']}", tempo, e.g. "indie pop, warm female vocal, acoustic guitar, soft drums, nostalgic, 92 bpm".
+"bpm": integer 70-125.
+"duration": integer seconds between 160 and 190.
+"lyrics": fully ORIGINAL lyrics, 26 to 32 lines, with section tags on their own lines ([Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Chorus], [Bridge], [Final Chorus]). Simple, emotional, singable, a repeating chorus hook, everyday US-life imagery. No real artist names, no copied lyrics.
+"title": max 95 characters. Pattern: "<Song Title> ([DURATION]) | <two or three searchable moods or genres> Song 2026 | Lyrics". Keep the exact text [DURATION] in it. Natural American English, no emojis, no fake claims.
+"thumbnail_line": the song title in CAPS, max 3 words (shorten if needed).
+"thumbnail_sub": three short mood or genre tags in CAPS separated by commas.
+"description_intro": 3 sentences, SEO-rich and warm: name the song and the singer, the feeling of the song, and when it fits (late night, study, drive, relax). Truthful, no claims about other songs.
+"first_comment": a friendly comment from the channel that asks one fun question about the listener's life or their favorite lyric, plus a short like-and-subscribe request. Max 300 characters.
+"cta_question": one short question shown on screen (max 70 characters), e.g. about their favorite line.
+"tags": array of 20 search tags (mix broad and specific; include the song title, "{genre}", "lyrics", "2026").
+"hashtags": array of 3 hashtags.
+"image_prompt": ONE vivid description (max 55 words) of the hero picture: {persona['name']} as {persona['look']}, in a cinematic scene that matches the song, expressive face looking at the camera, subject on the RIGHT third of the frame with empty space on the LEFT. No text, no logos, no other people."""
+
+
+def make_loop_plan(persona, genre, hook, context):
+    top = None
+    for attempt in range(3):
+        top = llm_json(build_loop_prompt(persona, genre, hook, context))
+        song = _clean_song(top or {}, persona, genre) if top else None
+        if song:
+            break
+        print(f"[plan] song idea failed ({attempt + 1}/3)")
+        time.sleep(25)
+    else:
+        song = None
+    fb = fallback_plan(persona, genre, hook)
+    top = top or {}
+    if not song:
+        print("[plan] using the built-in song")
+        song = {"song_title": "Last Night", "caption": fb["caption"], "bpm": fb["bpm"], "duration": 170, "lyrics": fb["lyrics"]}
+        top = {}
+    song["lyric_lines"] = [ln.strip() for ln in song["lyrics"].splitlines() if ln.strip() and not ln.strip().startswith("[")]
+    name = song["song_title"]
+    tags, total = [], 0
+    for t in (top.get("tags") or [name, genre, "lyrics", "2026", "new song"]):
+        t = re.sub(r"[<>,]", "", str(t)).strip()
+        if t and total + len(t) + 1 < 450:
+            tags.append(t)
+            total += len(t) + 1
+    title = re.sub(r"[<>]", "", str(top.get("title") or f"{name} ([DURATION]) | {genre.title()} Song 2026 | Lyrics")).strip()
+    if "[DURATION]" not in title:
+        title = f"{title} ([DURATION])" if len(title) < 80 else title
+    plan = {
+        "title": title[:105], "song": song, "songs": [song], "song_title": name,
+        "thumbnail_line": str(top.get("thumbnail_line") or name).upper()[:26],
+        "thumbnail_sub": str(top.get("thumbnail_sub") or f"{genre}, lyrics, new song").upper()[:48],
+        "description_intro": str(top.get("description_intro") or f"{name} by {persona['name']}. A {genre} song for late nights, study sessions and long drives. Press play and stay awhile.")[:900],
+        "first_comment": str(top.get("first_comment") or "What's your favorite line in this song? Tell me below! Like and subscribe if it hit you.")[:480],
+        "cta_question": str(top.get("cta_question") or "What's your favorite line?")[:80],
+        "hashtags": [h if str(h).startswith("#") else "#" + str(h).replace(" ", "") for h in (top.get("hashtags") or ["#newmusic", "#lyrics", "#song"])][:3],
+        "tags": tags, "image_prompt": str(top.get("image_prompt") or fb["image_prompt"])[:600],
+    }
+    print(f"[plan] song '{name}', title '{plan['title']}'")
+    return plan
+
+
+def build_loop_description(plan, persona):
+    parts = [plan["description_intro"], "",
+             f"\U0001F4AC {plan['cta_question']}", "\U0001F44D Like, subscribe, and turn on the bell for new songs every day.", "",
+             f"LYRICS - {plan['song_title']}", plan["song"]["lyrics"], "",
+             f"Sung by {persona['name']}, the fictional AI singer of {CHANNEL_NAME}.", "",
+             ", ".join(plan["tags"]), " ".join(plan["hashtags"]), "",
+             "Music and vocals are AI-generated. All characters are fictional."]
+    return "\n".join(parts)[:4990]

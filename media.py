@@ -94,7 +94,7 @@ def _font(size):
 
 
 def make_thumbnail(src, hook, persona_name, out, brand="MELODYRUSH", pal=None):
-    pal = pal or fx.PALETTES["gold"]
+    pal = pal or fx.PALETTES["rose"]
     img = Image.open(src).convert("RGB")
     ratio = max(W / img.width, H / img.height)
     img = img.resize((math.ceil(img.width * ratio), math.ceil(img.height * ratio)), Image.LANCZOS)
@@ -202,6 +202,15 @@ def _clean(s):
     return s.replace("{", "(").replace("}", ")").replace("\\", "")
 
 
+def _wrap_line(text):
+    """Same line break as the karaoke text, so the glow layer sits exactly under the words."""
+    words = _clean(text).split()
+    if len(text) > 26 and len(words) > 3:
+        k = len(words) // 2
+        return " ".join(words[:k]) + "\\N" + " ".join(words[k:])
+    return " ".join(words)
+
+
 def _karaoke(text, dur):
     words = _clean(text).split()
     if not words:
@@ -251,7 +260,7 @@ def probe_duration(path):
 
 def build_video(bg, audio, timed, cta_question, workdir, out, hook="NEW SONG", singer="", song="",
                 brand="MELODYRUSH", pal=None):
-    pal = pal or fx.PALETTES["gold"]
+    pal = pal or fx.PALETTES["rose"]
     workdir = Path(workdir).resolve()
     bg, audio, out = str(Path(bg).resolve()), str(Path(audio).resolve()), str(Path(out).resolve())
     duration = probe_duration(audio)
@@ -293,7 +302,7 @@ def build_video(bg, audio, timed, cta_question, workdir, out, hook="NEW SONG", s
     return duration
 
 
-def make_mix_thumbnail(src, plan, persona_name, out, brand, pal, badge):
+def make_mix_thumbnail(src, plan, persona_name, out, brand, pal, badge, line2="MIX 2026"):
     """Consistent premium template (like the successful mix channels): big words left, portrait right."""
     img = Image.open(src).convert("RGB")
     ratio = max(W / img.width, H / img.height)
@@ -309,7 +318,7 @@ def make_mix_thumbnail(src, plan, persona_name, out, brand, pal, badge):
     shade[:, :, 3] = (np.clip(xx + vig, 0, 0.9) * 255).astype(np.uint8)
     shade[:, :, 0], shade[:, :, 1], shade[:, :, 2] = 4, 4, 10
     img = Image.alpha_composite(img.convert("RGBA"), Image.fromarray(shade, "RGBA"))
-    img = Image.alpha_composite(img, fx.mix_title_layer(W, H, plan["thumbnail_line"], "MIX 2026", plan["thumbnail_sub"],
+    img = Image.alpha_composite(img, fx.mix_title_layer(W, H, plan["thumbnail_line"], line2, plan["thumbnail_sub"],
                                                         badge, brand, persona_name, pal))
     img = img.convert("RGB")
     for q in (95, 90, 82):
