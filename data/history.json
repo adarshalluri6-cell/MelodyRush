@@ -9,10 +9,14 @@
       "title": "Some mistakes are worth repeating: Before We Crash (Lyrics)",
       "duration": 182,
       "metrics": {
-        "views": 91,
+        "views": 133,
         "likes": 2,
-        "comments": 1
-      }
+        "comments": 1,
+        "subs": 2,
+        "avg_view_pct": 14.04,
+        "minutes": 30
+      },
+      "score": 4.9831
     },
     {
       "id": "tC5DfWUIrJM",
@@ -23,10 +27,14 @@
       "title": "She caught him lying and did this instead... (Lyrics)",
       "duration": 172,
       "metrics": {
-        "views": 4,
-        "likes": 1,
-        "comments": 2
-      }
+        "views": 62,
+        "likes": 2,
+        "comments": 3,
+        "subs": 0,
+        "avg_view_pct": 50.11,
+        "minutes": 2
+      },
+      "score": 5.3951
     },
     {
       "id": "UTF8J53xu5w",
@@ -35,12 +43,28 @@
       "genre": "folk pop",
       "hook": "curiosity question",
       "title": "Did We Give Up Too Soon? - Jax Calloway (Lyrics)",
-      "duration": 178
+      "duration": 178,
+      "metrics": {
+        "views": 71,
+        "likes": 0,
+        "comments": 1
+      }
+    },
+    {
+      "id": "1bnwtjNAh8s",
+      "date": "2026-10-13T11:48:49.086281+00:00",
+      "persona": "kai",
+      "genre": "soul pop",
+      "hook": "relatable moment",
+      "title": "Parked Outside Your House (1 Hour) | Chill Soul Pop Late Night Song 2026 | Lyrics",
+      "duration": 3667,
+      "songs": 1
     }
   ],
   "playlists": {
     "luna": "PLeaSXpSe_hVM",
     "nova": "PLAqJptfkQLMY",
-    "jax": "PLbENCPgliLcs"
+    "jax": "PLbENCPgliLcs",
+    "kai": "PLN51I9c8AGHI"
   }
 }
