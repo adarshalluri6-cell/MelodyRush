@@ -20,7 +20,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
 
@@ -53,7 +53,8 @@ jobs:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           CHANNEL_NAME: "MelodyRush"
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-          MODE: "mix"
+          MODE: "loop"
+          LOOP_MINUTES: "60"
           MAKE_SHORTS: "false"
         run: python main.py
 
@@ -66,8 +67,8 @@ jobs:
           git commit -m "Update performance history" || echo "nothing to commit"
           git push || echo "push skipped"
 
-      - name: Save test files
-        if: ${{ always() }}
+      - name: Save the finished files (only if a test run or something failed)
+        if: ${{ failure() || github.event.inputs.dry_run == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: test-output
@@ -76,4 +77,4 @@ jobs:
             output/thumbnail.jpg
             output/plan.json
             output/description.txt
-          retention-days: 3
+          retention-days: 7
