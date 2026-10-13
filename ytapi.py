@@ -1,6 +1,7 @@
 """YouTube API helpers: stats, analytics, upload, thumbnail, comment, playlist."""
 import datetime as dt
 import os
+import time
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -84,11 +85,26 @@ class YT:
         def go(b):
             media = MediaFileUpload(str(video_path), chunksize=8 * 1024 * 1024, resumable=True)
             req = self.yt.videos().insert(part="snippet,status", body=b, media_body=media)
-            resp = None
+            resp, fails = None, 0
             while resp is None:
-                status, resp = req.next_chunk()
-                if status:
-                    log(f"  uploaded {int(status.progress() * 100)}%")
+                try:
+                    status, resp = req.next_chunk(num_retries=5)
+                    fails = 0
+                    if status:
+                        log(f"  uploaded {int(status.progress() * 100)}%")
+                except HttpError as e:
+                    if e.resp.status in (500, 502, 503, 504) and fails < 15:
+                        fails += 1
+                        log(f"  server hiccup ({e.resp.status}), retry {fails}")
+                        time.sleep(min(60, 5 * fails))
+                        continue
+                    raise
+                except (OSError, ConnectionError, TimeoutError) as e:   # includes SSL errors
+                    fails += 1
+                    if fails > 15:
+                        raise
+                    log(f"  connection problem ({type(e).__name__}), retry {fails} in a moment")
+                    time.sleep(min(60, 5 * fails))
             return resp
         try:
             try:

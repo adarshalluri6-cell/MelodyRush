@@ -7,16 +7,34 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 FONTS = Path("fonts")
 PALETTES = {
-    "gold": {"light": (255, 226, 135), "dark": (196, 135, 36), "hex": "0xF5C85A", "rgb": (245, 200, 90)},
-    "blue": {"light": (160, 210, 255), "dark": (40, 110, 235), "hex": "0x6CB4FF", "rgb": (108, 180, 255)},
-    "pink": {"light": (255, 175, 218), "dark": (215, 50, 140), "hex": "0xFF6EC0", "rgb": (255, 110, 192)},
-    "teal": {"light": (150, 255, 236), "dark": (20, 165, 155), "hex": "0x4FF0D8", "rgb": (79, 240, 216)},
+    "rose": {"light": (255, 196, 218), "dark": (226, 62, 122), "hex": "0xFF69A0", "rgb": (255, 105, 160)},
+    "cyan": {"light": (176, 242, 255), "dark": (0, 150, 232), "hex": "0x40E0FF", "rgb": (64, 224, 255)},
+    "violet": {"light": (228, 196, 255), "dark": (132, 72, 232), "hex": "0xBE78FF", "rgb": (190, 120, 255)},
+    "ember": {"light": (255, 208, 156), "dark": (232, 92, 32), "hex": "0xFF8C42", "rgb": (255, 140, 66)},
+    "mint": {"light": (176, 255, 228), "dark": (22, 182, 142), "hex": "0x50FFC8", "rgb": (80, 255, 200)},
 }
-PERSONA_PALETTE = {"mira": "gold", "kai": "blue", "luna": "pink", "jax": "gold", "nova": "teal"}
+PERSONA_PALETTE = {"mira": "rose", "kai": "cyan", "luna": "violet", "jax": "ember", "nova": "mint"}
 
 
 def palette_for(persona_id):
-    return PALETTES[PERSONA_PALETTE.get(persona_id, "gold")]
+    return PALETTES[PERSONA_PALETTE.get(persona_id, "rose")]
+
+
+def lyric_rgb(persona_id):
+    """Colour of the lyric words once sung (white before). Taken from the singer's palette, never yellow."""
+    return palette_for(persona_id)["rgb"]
+
+
+def light_band(path, pal, w=760, h=1080):
+    """Soft diagonal light streak that sweeps across the picture every 15 seconds."""
+    xs = np.linspace(-1, 1, w, dtype=np.float32)
+    prof = np.exp(-(xs / 0.28) ** 2)
+    a = np.broadcast_to(prof[None, :], (h, w)) * 0.20
+    img = np.zeros((h, w, 4), np.uint8)
+    col = np.array(pal["light"], np.float32) * 0.6 + 255 * 0.4
+    img[:, :, :3] = col.astype(np.uint8)
+    img[:, :, 3] = (a * 255).astype(np.uint8)
+    Image.fromarray(img, "RGBA").transform((w, h), Image.AFFINE, (1, 0.45, -0.22 * h, 0, 1, 0), Image.BICUBIC).save(path)
 
 
 def font(kind, size):
@@ -182,7 +200,7 @@ def make_particles(path, pal, w=1920, h=1080, seconds=10, fps=30, n=80, seed=11)
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
            "-r", str(fps), "-i", "-", "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p", str(path)]
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-    total = seconds * fps
+    total = int(round(seconds * fps))
     for f in range(total):
         t = f / total
         frame = np.zeros((h, w, 3), np.float32)

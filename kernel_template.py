@@ -68,6 +68,23 @@ for i, s in enumerate(songs):
 '''
 
 
+WHISPER = r'''
+import json, traceback
+from faster_whisper import WhisperModel
+songs = json.load(open("/tmp/ace/meta_songs.json"))
+model = WhisperModel("small.en" if len(songs) == 1 else "base.en", device="cpu", compute_type="int8")
+for sd in songs:
+    try:
+        segs, _ = model.transcribe("/kaggle/working/" + sd["file"], language="en", condition_on_previous_text=False)
+        data = [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs]
+    except Exception:
+        traceback.print_exc()
+        data = []
+    json.dump(data, open("/kaggle/working/segments_%02d.json" % sd["i"], "w"))
+    print("lyrics timing done for song", sd["i"] + 1, "segments:", len(data), flush=True)
+'''
+
+
 def newest_audio(folder="/tmp/ace/out"):
     files = [f for ext in ("flac", "mp3", "wav") for f in glob.glob(f"{folder}/**/*.{ext}", recursive=True)]
     return max(files, key=lambda f: Path(f).stat().st_mtime) if files else None
@@ -168,20 +185,29 @@ def main():
         traceback.print_exc()
     if meta["ok"]:
         try:
-            sh("pip install -q faster-whisper")
-            from faster_whisper import WhisperModel
-            model = WhisperModel("small.en" if n_songs == 1 else "base.en", device="cpu", compute_type="int8")
-            for sd in meta["songs"]:
-                try:
-                    segs, _ = model.transcribe(str(OUT / sd["file"]), language="en", condition_on_previous_text=False)
-                    data = [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs]
-                except Exception:
-                    traceback.print_exc()
-                    data = []
-                (OUT / f"segments_{sd['i']:02d}.json").write_text(json.dumps(data))
-                print("lyrics timing done for song", sd["i"] + 1, flush=True)
+            (REPO / "whisper_run.py").write_text(WHISPER)
+            Path("/tmp/ace/meta_songs.json").write_text(json.dumps(meta["songs"]))
+            sh("uv pip install faster-whisper", cwd=REPO)
+            sh("uv run python whisper_run.py", cwd=REPO)
         except Exception:
             traceback.print_exc()
+            print("WHISPER (uv environment) failed, trying the system Python", flush=True)
+            try:
+                sh("pip install -q faster-whisper")
+                from faster_whisper import WhisperModel
+                model = WhisperModel("small.en" if n_songs == 1 else "base.en", device="cpu", compute_type="int8")
+                for sd in meta["songs"]:
+                    try:
+                        segs, _ = model.transcribe(str(OUT / sd["file"]), language="en", condition_on_previous_text=False)
+                        data = [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs]
+                    except Exception:
+                        traceback.print_exc()
+                        data = []
+                    (OUT / f"segments_{sd['i']:02d}.json").write_text(json.dumps(data))
+                    print("lyrics timing done for song", sd["i"] + 1, "segments:", len(data), flush=True)
+            except Exception:
+                traceback.print_exc()
+                print("WHISPER failed completely: lyrics will be spread evenly", flush=True)
         make_image()
     (OUT / "meta.json").write_text(json.dumps(meta))
     if not meta["ok"]:

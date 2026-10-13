@@ -209,7 +209,12 @@ def main_mix():
     if DRY_RUN or FAKE:
         log("Dry run: not uploading. Download the 'test-output' artifact and check video.mp4 + thumbnail.jpg")
         return
-    vid = api.upload(video, plan["title"], description, plan["tags"])
+    try:
+        vid = api.upload(video, plan["title"], description, plan["tags"])
+    except Exception as e:
+        log("UPLOAD FAILED. The finished video is saved in this run's Artifacts (test-output): download it and upload it "
+            "in YouTube Studio with description.txt and thumbnail.jpg.")
+        raise
     api.set_thumbnail(vid, thumb)
     api.comment(vid, plan["first_comment"])
     api.add_to_playlist(hist, persona["id"], f"{persona['name']} - Songs", vid)
@@ -220,9 +225,85 @@ def main_mix():
     log("Saved to history. Done.")
 
 
+def main_loop():
+    """Daily video: ONE song played for about an hour, with the channel intro, synced lyrics and lots of motion."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    hist = brain.load_history()
+    api = None
+    if not FAKE:
+        import ytapi
+        api = ytapi.YT()
+        log("Learning from past videos...")
+        brain.update_metrics(hist, api)
+    persona, genre, hook, _ = brain.choose(hist)
+    target_min = int(os.getenv("LOOP_MINUTES", "60"))
+    context = "No data (test run)." if FAKE else brain.learning_context(hist, api)
+    plan = brain.make_loop_plan(persona, genre, hook, context)
+    (OUT / "plan.json").write_text(json.dumps(plan, indent=2), encoding="utf-8")
+    song = plan["song"]
+    log(f"Song: {plan['song_title']} | {persona['name']} | {genre}")
+
+    kaggle_res = None
+    if FAKE:
+        got = fake_songs(1, seconds=20)
+    else:
+        import kaggle_music
+        for attempt in (1, 2):
+            try:
+                log("Making the song and the singer picture on Kaggle's free GPU...")
+                kaggle_res = kaggle_music.generate_song({
+                    "run_id": uuid.uuid4().hex, "budget_min": 60,
+                    "songs": [{k: song[k] for k in ("caption", "lyrics", "bpm", "duration")}],
+                    "image_prompt": brain.image_prompt_for(persona, plan), "seed": persona["seed"]}, OUT)
+                break
+            except Exception as e:
+                log(f"Kaggle attempt {attempt} failed: {str(e)[:300]}")
+                if attempt == 2:
+                    raise
+                time.sleep(60)
+        got = kaggle_res["songs"]
+    segs = got[0]["segments"]
+    log(f"Song ready ({len(segs)} sung phrases detected for lyric timing)")
+
+    pal = fx.palette_for(persona["id"])
+    hero = media.get_singer_image(persona, plan["image_prompt"], kaggle_res.get("image") if kaggle_res else None, OUT / "singer.jpg")
+    audio = OUT / "loop_audio.mp3"
+    d, offsets, total = mix.build_loop_audio(got[0]["audio"], audio, target_min * 60)
+    actual_min = max(1, round(total / 60))
+    title = plan["title"].replace("[DURATION]", brain.duration_label(actual_min))[:100]
+    thumb = media.make_mix_thumbnail(hero, plan, persona["name"], OUT / "thumbnail.jpg", brain.CHANNEL_NAME, pal,
+                                     brain.badge_label(actual_min), line2="SONG 2026")
+    n = len(offsets)
+    ass = OUT / "lyrics.ass"
+    mix.write_mix_ass(ass, [song] * n, [segs] * n, [d] * n, offsets, total, plan["cta_question"], pal, brain.CHANNEL_NAME,
+                      lyric_rgb=fx.lyric_rgb(persona["id"]), loop=True)
+    video = OUT / "video.mp4"
+    mix.render(hero, audio, ass, OUT, video, pal, brain.CHANNEL_NAME)
+    description = brain.build_loop_description(plan, persona)
+    (OUT / "description.txt").write_text(f"{title}\n\n{description}", encoding="utf-8")
+    log(f"Title: {title}")
+
+    if DRY_RUN or FAKE:
+        log("Dry run: not uploading. Download the 'test-output' artifact and check video.mp4 + thumbnail.jpg")
+        return
+    try:
+        vid = api.upload(video, title, description, plan["tags"])
+    except Exception:
+        log("UPLOAD FAILED. The finished video is saved in this run's Artifacts (test-output): download it and upload it "
+            "in YouTube Studio with description.txt and thumbnail.jpg.")
+        raise
+    api.set_thumbnail(vid, thumb)
+    api.comment(vid, plan["first_comment"])
+    api.add_to_playlist(hist, persona["id"], f"{persona['name']} - Songs", vid)
+    hist["videos"].append({"id": vid, "date": dt.datetime.now(dt.timezone.utc).isoformat(), "persona": persona["id"],
+                           "genre": genre, "hook": hook, "title": title, "duration": round(total), "songs": 1})
+    brain.save_history(hist)
+    log("Saved to history. Done.")
+
+
 if __name__ == "__main__":
     try:
-        (main if os.getenv("MODE", "mix").strip().lower() == "song" else main_mix)()
+        {"song": main, "mix": main_mix}.get(os.getenv("MODE", "loop").strip().lower(), main_loop)()
     except Exception as e:
         log(f"FAILED: {type(e).__name__}: {e}")
         sys.exit(1)

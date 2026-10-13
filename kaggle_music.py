@@ -72,6 +72,12 @@ def _download(ref, outdir, run_id):
         for lg in d.glob("*.log"):
             log("---- Kaggle log (tail) ----\n" + lg.read_text(errors="ignore")[-3000:])
         raise RuntimeError("Song generation failed on Kaggle: " + str(meta.get("error", ""))[-800:])
+    import re as _re
+    for lg in d.glob("*.log"):
+        txt = lg.read_text(errors="ignore")
+        hits = [ln for ln in _re.findall(r'"data":"([^"]*)"', txt) if _re.search(r"WHISPER|segments:|Traceback|ModuleNotFound|ctranslate|faster", ln)]
+        if hits:
+            log("---- Kaggle lyric-timing notes ----\n" + "\n".join(h.replace("\\n", "") for h in hits[:25]))
     songs = []
     for sd in meta.get("songs") or []:
         sf = d / f"segments_{sd['i']:02d}.json"
