@@ -16,7 +16,7 @@
         "avg_view_pct": 15.310000000000002,
         "minutes": 47
       },
-      "score": 4.7972
+      "score": 4.7623
     },
     {
       "id": "tC5DfWUIrJM",
@@ -27,14 +27,14 @@
       "title": "She caught him lying and did this instead... (Lyrics)",
       "duration": 172,
       "metrics": {
-        "views": 96,
+        "views": 101,
         "likes": 2,
         "comments": 3,
         "subs": 0,
         "avg_view_pct": 13.919999999999998,
         "minutes": 14
       },
-      "score": 4.4884
+      "score": 4.4495
     },
     {
       "id": "UTF8J53xu5w",
@@ -52,7 +52,7 @@
         "avg_view_pct": 32.91,
         "minutes": 18
       },
-      "score": 4.2827
+      "score": 4.2284
     },
     {
       "id": "1bnwtjNAh8s",
@@ -64,7 +64,7 @@
       "duration": 3667,
       "songs": 1,
       "metrics": {
-        "views": 39,
+        "views": 41,
         "likes": 1,
         "comments": 1
       }
@@ -78,12 +78,23 @@
       "title": "I Still Drive Your Way (1 Hour) | Late Night Chill Pop Song 2026 | Lyrics",
       "duration": 3625,
       "songs": 1
+    },
+    {
+      "id": "Z-hqtKnZWUQ",
+      "date": "2026-10-14T12:04:54.639015+00:00",
+      "persona": "mira",
+      "genre": "acoustic pop",
+      "hook": "emotional confession",
+      "title": "I Still Drive By (1 Hour) | Acoustic Pop Late Night Chill Song 2026 | Lyrics",
+      "duration": 3532,
+      "songs": 1
     }
   ],
   "playlists": {
     "luna": "PLeaSXpSe_hVM",
     "nova": "PLAqJptfkQLMY",
     "jax": "PLbENCPgliLcs",
-    "kai": "PLN51I9c8AGHI"
+    "kai": "PLN51I9c8AGHI",
+    "mira": "PLMZoBiz0wXpM"
   }
 }
