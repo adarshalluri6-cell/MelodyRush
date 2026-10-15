@@ -16,7 +16,7 @@
         "avg_view_pct": 16.7,
         "minutes": 61
       },
-      "score": 4.6023
+      "score": 4.5852
     },
     {
       "id": "tC5DfWUIrJM",
@@ -34,7 +34,7 @@
         "avg_view_pct": 15.289999999999997,
         "minutes": 26
       },
-      "score": 4.2554
+      "score": 4.2354
     },
     {
       "id": "UTF8J53xu5w",
@@ -52,7 +52,7 @@
         "avg_view_pct": 26.3,
         "minutes": 54
       },
-      "score": 4.6634
+      "score": 4.6394
     },
     {
       "id": "1bnwtjNAh8s",
@@ -79,7 +79,7 @@
       "duration": 3625,
       "songs": 1,
       "metrics": {
-        "views": 14,
+        "views": 17,
         "likes": 0,
         "comments": 1
       }
@@ -109,6 +109,18 @@
       "duration": 3679,
       "songs": 1,
       "keyword": "soul pop songs",
+      "thumb": "A"
+    },
+    {
+      "id": "ZuSGWTjv40M",
+      "date": "2026-10-15T11:44:14.413911+00:00",
+      "persona": "kai",
+      "genre": "chill pop",
+      "hook": "relatable moment",
+      "title": "Passing Your Exit - Chill Pop Music for Studying 1 Hour",
+      "duration": 3595,
+      "songs": 1,
+      "keyword": "chill pop music for studying",
       "thumb": "A"
     }
   ],
