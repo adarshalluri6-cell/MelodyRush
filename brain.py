@@ -501,33 +501,52 @@ def llm_text(prompt):
 
 
 # ============================== ONE SONG, PLAYED FOR ABOUT AN HOUR ==============================
-def build_loop_prompt(persona, genre, hook, context):
+MUMBLE = re.compile(r"\b(whisper\w*|murmur\w*|mumbl\w*|breathy|muffled|ambient|dreamy|ethereal|lo-?fi|chopped|distorted|vocal chops?|"
+                    r"layered harmonies|reverb[- ]drenched|washed[- ]out|atmospheric|hushed|spoken)\b", re.I)
+CLEAR_VOCAL = "clear lead vocal, vocals upfront in the mix, clearly sung words, crisp enunciation, natural singing, polished radio mix"
+
+
+def clear_vocal_caption(caption):
+    """The song generator mumbles when the style tags ask for whispery/ambient sounds. Remove those, ask for a clear lead vocal."""
+    c = MUMBLE.sub("", str(caption or ""))
+    c = re.sub(r"\s+", " ", c)
+    c = re.sub(r"(\s*,)+\s*", ", ", c).strip(" ,")
+    return (c + ", " + CLEAR_VOCAL)[:380]
+
+
+def build_loop_prompt(persona, genre, hook, context, seo_block=""):
     return f"""You run a YouTube music channel called "{CHANNEL_NAME}" for a US audience (ages 16-34). Create ONE new original English song for the fictional singer {persona['name']} ({persona['voice']}, {persona['gender']}). Genre: {genre}. Title hook style: {hook}.
-The video plays this song for about an hour, made for people who want to leave it on while they study, drive, work or fall asleep, so the song should be catchy, warm and easy to listen to again and again.
+The video plays this song for about an hour, with only a picture of the singer on screen and NO lyrics shown, so people must understand every word by ear: the vocal must be a clear, strong, well-pronounced lead voice, not whispery, not mumbled, not buried under effects. Catchy, warm, easy to sing along to and to hear again and again.
 
 {context}
 
+{seo_block}
+
 Return ONLY a JSON object with these keys:
-"song_title": 2 to 5 words, memorable, easy to search.
-"caption": comma-separated music tags for the song generator, include genre, mood, instruments, "{persona['voice']}", tempo, e.g. "indie pop, warm female vocal, acoustic guitar, soft drums, nostalgic, 92 bpm".
+"primary_keyword": the ONE most-searched phrase from the research that honestly describes this song (e.g. "sad songs for late night drive"); if there is no research, invent a natural phrase people would type.
+"song_title": 2 to 4 words, memorable, easy to read on a phone.
+"caption": comma-separated music tags for the song generator, include genre, mood, instruments, "{persona['voice']}", tempo, e.g. "indie pop, warm female vocal, acoustic guitar, soft drums, nostalgic, 92 bpm". Never use whisper, breathy, ambient, dreamy, lo-fi or ethereal.
 "bpm": integer 70-125.
 "duration": integer seconds between 160 and 190.
 "lyrics": fully ORIGINAL lyrics, 26 to 32 lines, with section tags on their own lines ([Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Chorus], [Bridge], [Final Chorus]). Simple, emotional, singable, a repeating chorus hook, everyday US-life imagery. No real artist names, no copied lyrics.
-"title": max 95 characters. Pattern: "<Song Title> ([DURATION]) | <two or three searchable moods or genres> Song 2026 | Lyrics". Keep the exact text [DURATION] in it. Natural American English, no emojis, no fake claims.
-"thumbnail_line": the song title in CAPS, max 3 words (shorten if needed).
+"title": max 70 characters, keyword words in the first 55. It must give a REASON to click: the song name plus the moment or feeling it is for, taken from the research (e.g. "Midnight Rain - Songs for a Late Night Drive ([DURATION])"). Honest, no fake claims. Keep the exact text [DURATION] in it. Natural American English, Title Case, no emojis, no ALL CAPS, no fake claims, no artist or brand names.
+"thumbnail_line": the song title in CAPS, max 2 words if possible (3 at most); it must be readable on a tiny phone screen.
+"thumbnail_tagline": the SONG TYPE shown on the thumbnail: 2 or 3 words naming the moment or style, the same idea as the title (e.g. "Late Night Vibes", "Night Drive", "Rainy Day Mood", "Study Chill"), Title Case.
 "thumbnail_sub": three short mood or genre tags in CAPS separated by commas.
-"description_intro": 3 sentences, SEO-rich and warm: name the song and the singer, the feeling of the song, and when it fits (late night, study, drive, relax). Truthful, no claims about other songs.
+"description_intro": 3 sentences, SEO-rich and warm. The FIRST sentence (it is the only part shown before "show more") must contain the song title AND the primary_keyword naturally, within 140 characters. Then the singer, the feeling, and when it fits (late night, study, drive, relax). Truthful, no claims about other songs.
 "first_comment": a friendly comment from the channel that asks one fun question about the listener's life or their favorite lyric, plus a short like-and-subscribe request. Max 300 characters.
 "cta_question": one short question shown on screen (max 70 characters), e.g. about their favorite line.
-"tags": array of 20 search tags (mix broad and specific; include the song title, "{genre}", "lyrics", "2026").
+"tags": array of 20 search tags (first the primary_keyword, then the song title, then broad and specific phrases from the research; include "{genre}", "lyrics", "2026").
 "hashtags": array of 3 hashtags.
 "image_prompt": ONE vivid description (max 55 words) of the hero picture: {persona['name']} as {persona['look']}, in a cinematic scene that matches the song, expressive face looking at the camera, subject on the RIGHT third of the frame with empty space on the LEFT. No text, no logos, no other people."""
 
 
-def make_loop_plan(persona, genre, hook, context):
+def make_loop_plan(persona, genre, hook, context, seo=None):
+    import seo as seo_mod
+    seo = seo or {}
     top = None
     for attempt in range(3):
-        top = llm_json(build_loop_prompt(persona, genre, hook, context))
+        top = llm_json(build_loop_prompt(persona, genre, hook, context, seo_mod.prompt_block(seo)))
         song = _clean_song(top or {}, persona, genre) if top else None
         if song:
             break
@@ -541,20 +560,19 @@ def make_loop_plan(persona, genre, hook, context):
         print("[plan] using the built-in song")
         song = {"song_title": "Last Night", "caption": fb["caption"], "bpm": fb["bpm"], "duration": 170, "lyrics": fb["lyrics"]}
         top = {}
+    song["caption"] = clear_vocal_caption(song["caption"])
     song["lyric_lines"] = [ln.strip() for ln in song["lyrics"].splitlines() if ln.strip() and not ln.strip().startswith("[")]
     name = song["song_title"]
-    tags, total = [], 0
-    for t in (top.get("tags") or [name, genre, "lyrics", "2026", "new song"]):
-        t = re.sub(r"[<>,]", "", str(t)).strip()
-        if t and total + len(t) + 1 < 450:
-            tags.append(t)
-            total += len(t) + 1
-    title = re.sub(r"[<>]", "", str(top.get("title") or f"{name} ([DURATION]) | {genre.title()} Song 2026 | Lyrics")).strip()
+    primary = str(top.get("primary_keyword") or (seo.get("keywords") or [f"{genre} songs"])[0])[:60]
+    tags = seo_mod.merge_tags(primary, name, top.get("tags") or [name, genre, "lyrics", "2026", "new song"], seo)
+    title = re.sub(r"[<>]", "", str(top.get("title") or f"{name} - {primary.title()} ([DURATION])")).strip()
     if "[DURATION]" not in title:
         title = f"{title} ([DURATION])" if len(title) < 80 else title
     plan = {
-        "title": title[:105], "song": song, "songs": [song], "song_title": name,
+        "title": title[:100], "song": song, "songs": [song], "song_title": name,
         "thumbnail_line": str(top.get("thumbnail_line") or name).upper()[:26],
+        "thumbnail_tagline": str(top.get("thumbnail_tagline") or "Late Night Vibes")[:28],
+        "primary_keyword": primary,
         "thumbnail_sub": str(top.get("thumbnail_sub") or f"{genre}, lyrics, new song").upper()[:48],
         "description_intro": str(top.get("description_intro") or f"{name} by {persona['name']}. A {genre} song for late nights, study sessions and long drives. Press play and stay awhile.")[:900],
         "first_comment": str(top.get("first_comment") or "What's your favorite line in this song? Tell me below! Like and subscribe if it hit you.")[:480],
@@ -567,10 +585,14 @@ def make_loop_plan(persona, genre, hook, context):
 
 
 def build_loop_description(plan, persona):
+    kw = plan.get("primary_keyword") or ""
     parts = [plan["description_intro"], "",
-             f"\U0001F4AC {plan['cta_question']}", "\U0001F44D Like, subscribe, and turn on the bell for new songs every day.", "",
+             f"\U0001F4AC {plan['cta_question']}  Tell me in the comments!",
+             "\U0001F44D Like, subscribe, and turn on the bell for a new song every day.", "",
+             "Perfect for: late night drives, studying, working, relaxing, sleeping.",
+             f"Search it as: {plan['song_title']} lyrics, {kw}." if kw else "", "",
              f"LYRICS - {plan['song_title']}", plan["song"]["lyrics"], "",
              f"Sung by {persona['name']}, the fictional AI singer of {CHANNEL_NAME}.", "",
-             ", ".join(plan["tags"]), " ".join(plan["hashtags"]), "",
+             " ".join(plan["hashtags"]), "",
              "Music and vocals are AI-generated. All characters are fictional."]
     return "\n".join(parts)[:4990]

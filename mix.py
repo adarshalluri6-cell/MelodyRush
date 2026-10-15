@@ -48,10 +48,16 @@ def build_audio(song_files, workdir, out_mp3):
     return durs, offsets
 
 
+def loop_xf(song, want=1.5):
+    """Cross-fade length that makes the repeat period an exact number of video frames (so lyrics never drift)."""
+    d = media.probe_duration(song)
+    return d - round((d - want) * FPS) / FPS
+
+
 def build_loop_audio(song, out_mp3, target_s, xf=1.5):
     """Repeat one song until about target_s seconds, joined with smooth cross-fades. Returns (song_len, offsets, total)."""
     d = media.probe_duration(song)
-    n = max(2, round((target_s - xf) / (d - xf)))
+    n = max(3, round((target_s - xf) / (d - xf)))
     cmd = ["ffmpeg", "-y", "-loglevel", "error"]
     for _ in range(n):
         cmd += ["-i", str(song)]
@@ -60,7 +66,7 @@ def build_loop_audio(song, out_mp3, target_s, xf=1.5):
         chain += f"{prev}[{i}:a]acrossfade=d={xf}:c1=tri:c2=tri[a{i}];"
         prev = f"[a{i}]"
     total = n * d - (n - 1) * xf
-    chain += f"{prev}afade=t=in:st=0:d=1.2,afade=t=out:st={total - 3:.2f}:d=3[aout]"
+    chain += f"{prev}loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=in:st=0:d=1.2,afade=t=out:st={total - 3:.2f}:d=3[aout]"
     run(cmd + ["-filter_complex", chain, "-map", "[aout]", "-c:a", "libmp3lame", "-b:a", "192k", "-ar", "44100", str(out_mp3)])
     offsets = [k * (d - xf) for k in range(n)]
     log(f"Audio OK: the song x{n}, {total / 60:.1f} minutes")
@@ -143,8 +149,7 @@ def render(hero, audio, ass, workdir, out, pal, brand):
     fx.light_band(workdir / "band.png", pal)
     fc = (f"[0:v]scale=3072:1728:flags=lanczos,zoompan=z='1.06+0.04*sin(6.2832*on/{frames})':"
           f"x='iw/2-(iw/zoom/2)+70*sin(6.2832*on/{frames})':y='ih/2-(ih/zoom/2)+36*sin(2*6.2832*on/{frames})'"
-          f":d={frames}:s=1920x1080:fps={FPS},eq=saturation=1.06:contrast=1.04:brightness='0.012*sin(2*6.2832*t/15)':eval=frame,"
-          "noise=alls=5:allf=t,format=gbrp[bg];"
+          f":d={frames}:s=1920x1080:fps={FPS},format=gbrp[bg];"
           "[1:v]scale=1920:1080,format=gbrp[p];[bg][p]blend=all_mode=screen:shortest=1,format=rgba[m];"
           "[m][3:v]overlay=x='-760+(W+760)*mod(t,15)/15':y=0:format=auto[m2];"
           "[m2][2:v]overlay=0:0:format=auto,format=yuv420p[v]")
@@ -182,3 +187,240 @@ def render(hero, audio, ass, workdir, out, pal, brand):
         Path(f).unlink(missing_ok=True)
     log(f"Video OK ({Path(out).stat().st_size / 1e6:.0f} MB), final pass {time.time() - T1:.0f}s for {total:.0f}s of video")
     return total
+
+
+# =====================================================================================================
+# ONE-SONG LOOP VIDEO: render ONE cycle (one pass of the song) with everything on it, then repeat it.
+# Premium look = the thumbnail artwork in motion: slow zoom, sparkles, light sweep, bar equalizer, synced lyrics.
+# =====================================================================================================
+EQ_W, EQ_H, EQ_X, EQ_Y = 780, 170, 1040, 705
+
+
+def write_cycle_ass(path, song, segs, d, cycle_len, cta_question, pal, lyric_rgb, skip_before=0.0):
+    font_n = "Anton" if media.ANTON.exists() else "DejaVu Sans"
+    bold = 0 if media.ANTON.exists() else -1
+    acc, sung = _bgr(pal["rgb"]), _bgr(lyric_rgb)
+    head = ("[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\nWrapStyle: 2\n\n[V4+ Styles]\n"
+            "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,"
+            "StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\n"
+            f"Style: Lyric,{font_n},74,{sung},&H00FFFFFF,&H00180C10,&H78000000,{bold},0,0,0,100,100,1,0,1,5,3,2,700,30,46,1\n"
+            f"Style: Glow,{font_n},74,{sung},{sung},{sung},&H00000000,{bold},0,0,0,100,100,1,0,1,12,0,2,700,30,46,1\n"
+            f"Style: Cta,{font_n},50,&H00FFFFFF,&H00FFFFFF,{acc},&H78000000,{bold},0,0,0,100,100,2,0,1,5,2,9,60,60,50,1\n\n"
+            "[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n")
+    ev, ts = [], media._ts
+    for text, a, b in media.align(song["lyric_lines"], segs, d):
+        if a < skip_before or a >= cycle_len - 0.5:
+            continue
+        b = min(b, cycle_len - 0.05)
+        slide = "\\an2\\move(1310,1030,1310,1004,0,230)\\fad(110,190)\\fscx92\\fscy92\\t(0,230,\\fscx100\\fscy100)"
+        ev.append(f"Dialogue: 0,{ts(a)},{ts(b)},Glow,,0,0,0,,{{{slide}\\blur12\\1a&HFF&\\3a&H60&}}{media._wrap_line(text)}")
+        ev.append(f"Dialogue: 1,{ts(a)},{ts(b)},Lyric,,0,0,0,,{{{slide}\\blur1.2}}{media._karaoke(text, b - a)}")
+    for t0, text in ((cycle_len * 0.33, "LIKE & SUBSCRIBE  \u2665"), (cycle_len * 0.70, media._clean(cta_question).upper())):
+        if t0 >= skip_before:
+            ev.append(f"Dialogue: 3,{ts(t0)},{ts(t0 + 4.5)},Cta,,0,0,0,,{{\\fad(300,500)\\move(1860,-60,1860,50,0,380)}}{text}")
+    Path(path).write_text(head + "\n".join(ev) + "\n", encoding="utf-8")
+
+
+def _cycle_encode(extra=None):
+    return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "25", "-maxrate", "1900k", "-bufsize", "3800k", "-pix_fmt", "yuv420p",
+            "-r", str(FPS), "-g", str(FPS * 2), "-keyint_min", str(FPS * 2), "-sc_threshold", "0"] + (extra or [])
+
+
+def _compose_cycle(wd, art, title, particles, band, eq, ass, cyc, pal, out, use_eq, use_subs, intro=None, limit=None):
+    frames = int(round(cyc * FPS))
+    kz = max(1, round(cyc / 30))                       # zoom/drift cycles per pass: seamless when the pass repeats
+    P = cyc / max(2, math.ceil(cyc / 15))              # light sweep period (divides the pass exactly)
+    fontsdir = str(media.FONTS.resolve()) if media.FONTS.exists() else "/usr/share/fonts"
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(art), "-stream_loop", "-1", "-i", str(particles),
+           "-loop", "1", "-framerate", str(FPS), "-t", f"{cyc:.3f}", "-i", str(band),
+           "-loop", "1", "-framerate", str(FPS), "-t", f"{cyc:.3f}", "-i", str(title)]
+    n_in = 4
+    if use_eq:
+        cmd += ["-i", str(eq)]
+        eq_i, n_in = n_in, n_in + 1
+    if intro:
+        cmd += ["-i", str(intro)]
+        in_i, n_in = n_in, n_in + 1
+    fc = (f"[0:v]scale=3072:1728:flags=lanczos,zoompan=z='1.06+0.04*sin(6.2832*{kz}*on/{frames})':"
+          f"x='iw/2-(iw/zoom/2)+70*sin(6.2832*{kz}*on/{frames})':y='ih/2-(ih/zoom/2)+36*sin(2*6.2832*{kz}*on/{frames})'"
+          f":d={frames}:s=1920x1080:fps={FPS},format=gbrp[bg];"
+          "[1:v]scale=1920:1080,format=gbrp[p];[bg][p]blend=all_mode=screen:shortest=1,format=rgba[m];"
+          f"[m][2:v]overlay=x='-760+(W+760)*mod(t,{P:.4f})/{P:.4f}':y=0:format=auto:shortest=1[m2];"
+          "[m2][3:v]overlay=0:0:format=auto:shortest=1[m3]")
+    last = "m3"
+    if use_eq:
+        fc += (f";[{last}]split[a][b];[b]crop={EQ_W}:{EQ_H}:{EQ_X}:{EQ_Y},format=gbrp[c];[{eq_i}:v]format=gbrp[e];"
+               f"[c][e]blend=all_mode=screen:shortest=1[d];[a][d]overlay={EQ_X}:{EQ_Y}:format=auto:shortest=1[v1]")
+        last = "v1"
+    if use_subs:
+        fc += f";[{last}]subtitles={Path(ass).name}:fontsdir={fontsdir}[v2]"
+        last = "v2"
+    if intro:
+        fc += (f";[{in_i}:v]format=yuva420p,fade=t=out:st=2.6:d=1.4:alpha=1[ii];"
+               f"[{last}][ii]overlay=0:0:enable='lt(t,4.0)':format=auto[v3]")
+        last = "v3"
+    fc += f";[{last}]format=yuv420p[v]"
+    run(cmd + ["-filter_complex", fc, "-map", "[v]", "-t", f"{(limit or cyc):.3f}", *_cycle_encode(), str(out)], cwd=str(Path(ass).parent))
+
+
+def render_loop(art_png, title_png, audio, d, xf, song, segs, plan, pal, lyric_rgb, workdir, out, brand):
+    workdir = Path(workdir).resolve()
+    art_png, title_png, audio, out = (str(Path(x).resolve()) for x in (art_png, title_png, audio, out))
+    total = media.probe_duration(audio)
+    cyc = d - xf
+    T0 = time.time()
+    log(f"Making one {cyc:.0f}s cycle (the whole video is this cycle repeated)...")
+    particles, band, eq, intro = workdir / "particles.mp4", workdir / "band.png", workdir / "eq.mp4", workdir / "intro.mp4"
+    fx.make_particles(particles, pal, w=1920, h=1080, seconds=10, fps=FPS, n=64, seed=7)
+    fx.light_band(band, pal)
+    have_eq = True
+    try:
+        fx.render_eq(audio, cyc, cyc, eq, pal, w=EQ_W, h=EQ_H, fps=FPS)
+    except Exception as e:
+        log(f"Equalizer failed ({str(e)[:120]}); continuing without it")
+        have_eq = False
+    have_intro = True
+    try:
+        fx.make_intro(intro, brand, pal, seconds=INTRO_S, fps=FPS)
+    except Exception as e:
+        log(f"Intro failed ({str(e)[:120]}); continuing without it")
+        have_intro = False
+    ass_full, ass_intro = workdir / "cycle.ass", workdir / "cycle_intro.ass"
+    write_cycle_ass(ass_full, song, segs, d, cyc, plan["cta_question"], pal, lyric_rgb)
+    write_cycle_ass(ass_intro, song, segs, d, cyc, plan["cta_question"], pal, lyric_rgb, skip_before=INTRO_S + 0.3)
+    cycle, head, rest = workdir / "cycle.mp4", workdir / "head.mp4", workdir / "rest.mp4"
+    HEAD_S = 6.0                                       # keyframes every 2 s, so 6.0 is an exact cut point
+    ok = False
+    for use_eq, use_subs in ((have_eq, True), (have_eq, False), (False, False)):
+        try:
+            _compose_cycle(workdir, art_png, title_png, particles, band, eq, ass_full, cyc, pal, cycle, use_eq, use_subs)
+            _compose_cycle(workdir, art_png, title_png, particles, band, eq, ass_intro, cyc, pal, head, use_eq, use_subs,
+                           intro=intro if have_intro else None, limit=HEAD_S)
+            ok = True
+            break
+        except Exception as e:
+            log(f"Cycle render variant (eq={use_eq}, lyrics={use_subs}) failed: {str(e)[:160]}")
+    if not ok:
+        raise RuntimeError("cycle render failed")
+    run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{HEAD_S}", "-i", str(cycle), "-c", "copy", str(rest)])
+    reps = max(1, math.ceil(total / cyc))
+    lst = workdir / "cycles.txt"
+    lst.write_text(f"file '{head}'\nfile '{rest}'\n" + "".join(f"file '{cycle}'\n" for _ in range(reps - 1)))
+    log(f"Cycle ready ({time.time() - T0:.0f}s). Joining {reps} repeats with the audio...")
+    run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst), "-i", audio, "-map", "0:v", "-map", "1:a",
+         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-t", f"{total:.2f}", "-movflags", "+faststart", out])
+    for f in (particles, band, eq, intro, cycle, head, rest, lst, ass_full, ass_intro):
+        Path(f).unlink(missing_ok=True)
+    log(f"Video OK ({Path(out).stat().st_size / 1e6:.0f} MB) in {time.time() - T0:.0f}s")
+    return total
+
+
+def render_simple(art_png, title_png, audio, out):
+    """Last-resort video: the finished artwork as a still picture + the music. Always works."""
+    from PIL import Image
+    flat = Path(out).with_name("flat.png")
+    base = Image.open(art_png).convert("RGBA")
+    if title_png:
+        base = Image.alpha_composite(base, Image.open(title_png).convert("RGBA"))
+    base.convert("RGB").save(flat)
+    total = media.probe_duration(audio)
+    run(["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", "6", "-i", str(flat), "-i", str(audio),
+         "-c:v", "libx264", "-tune", "stillimage", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p", "-r", "6",
+         "-c:a", "aac", "-b:a", "192k", "-t", f"{total:.2f}", "-movflags", "+faststart", str(out)])
+    flat.unlink(missing_ok=True)
+    log("Video OK (simple version)")
+    return total
+
+
+def render_safe(art_png, title_png, audio, d, xf, song, segs, plan, pal, lyric_rgb, workdir, out, brand):
+    for attempt in (1, 2):
+        try:
+            return render_loop(art_png, title_png, audio, d, xf, song, segs, plan, pal, lyric_rgb, workdir, out, brand)
+        except Exception as e:
+            log(f"Full render attempt {attempt} failed: {str(e)[:200]}")
+    log("Using the simple video so the upload still happens")
+    return render_simple(art_png, title_png, audio, out)
+
+
+# =====================================================================================================
+# STILL VIDEO (current look): the character picture, nothing else, plus ONE small sound wave and the intro.
+# One cycle = one pass of the song; the whole video repeats it, so the wave always matches the music.
+# =====================================================================================================
+SW_W, SW_H, SW_X, SW_Y = 440, 110, 110, 860          # small wave, bottom-left (the empty side of the picture)
+
+
+def _still_cycle(art, eq, cyc, out, use_eq, intro=None, limit=None):
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", str(FPS), "-t", f"{cyc:.3f}", "-i", str(art)]
+    n = 1
+    if use_eq:
+        cmd += ["-i", str(eq)]
+        eq_i, n = n, n + 1
+    if intro:
+        cmd += ["-i", str(intro)]
+        in_i, n = n, n + 1
+    fc, last = "[0:v]format=rgba[base]", "base"
+    if use_eq:
+        fc += (f";[{last}]split[a][b];[b]crop={SW_W}:{SW_H}:{SW_X}:{SW_Y},format=gbrp[c];[{eq_i}:v]format=gbrp[e];"
+               f"[c][e]blend=all_mode=screen:shortest=1[d];[a][d]overlay={SW_X}:{SW_Y}:format=auto:shortest=1[v1]")
+        last = "v1"
+    if intro:
+        fc += (f";[{in_i}:v]format=yuva420p,fade=t=out:st=2.6:d=1.4:alpha=1[ii];"
+               f"[{last}][ii]overlay=0:0:enable='lt(t,4.0)':format=auto[v3]")
+        last = "v3"
+    fc += f";[{last}]format=yuv420p[v]"
+    run(cmd + ["-filter_complex", fc, "-map", "[v]", "-t", f"{(limit or cyc):.3f}", *_cycle_encode(), str(out)])
+
+
+def render_still(art_png, audio, d, xf, pal, workdir, out, brand):
+    workdir = Path(workdir).resolve()
+    art_png, audio, out = (str(Path(x).resolve()) for x in (art_png, audio, out))
+    total = media.probe_duration(audio)
+    cyc = d - xf
+    T0 = time.time()
+    log(f"Making one {cyc:.0f}s cycle (still picture + small sound wave)...")
+    eq, intro = workdir / "eq.mp4", workdir / "intro.mp4"
+    have_eq = True
+    try:
+        fx.render_eq(audio, cyc, cyc, eq, pal, w=SW_W, h=SW_H, fps=FPS, bars=20)
+    except Exception as e:
+        log(f"Sound wave failed ({str(e)[:120]}); continuing without it")
+        have_eq = False
+    have_intro = True
+    try:
+        fx.make_intro(intro, brand, pal, seconds=INTRO_S, fps=FPS)
+    except Exception as e:
+        log(f"Intro failed ({str(e)[:120]}); continuing without it")
+        have_intro = False
+    cycle, head, rest = workdir / "cycle.mp4", workdir / "head.mp4", workdir / "rest.mp4"
+    HEAD_S = 6.0
+    ok = False
+    for use_eq in ((True, False) if have_eq else (False,)):
+        try:
+            _still_cycle(art_png, eq, cyc, cycle, use_eq)
+            _still_cycle(art_png, eq, cyc, head, use_eq, intro=intro if have_intro else None, limit=HEAD_S)
+            ok = True
+            break
+        except Exception as e:
+            log(f"Cycle render (wave={use_eq}) failed: {str(e)[:160]}")
+    if not ok:
+        raise RuntimeError("cycle render failed")
+    run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{HEAD_S}", "-i", str(cycle), "-c", "copy", str(rest)])
+    reps = max(1, math.ceil(total / cyc))
+    lst = workdir / "cycles.txt"
+    lst.write_text(f"file '{head}'\nfile '{rest}'\n" + "".join(f"file '{cycle}'\n" for _ in range(reps - 1)))
+    run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst), "-i", audio, "-map", "0:v", "-map", "1:a",
+         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-t", f"{total:.2f}", "-movflags", "+faststart", out])
+    for f in (eq, intro, cycle, head, rest, lst):
+        Path(f).unlink(missing_ok=True)
+    log(f"Video OK ({Path(out).stat().st_size / 1e6:.0f} MB) in {time.time() - T0:.0f}s")
+    return total
+
+
+def render_still_safe(art_png, audio, d, xf, pal, workdir, out, brand):
+    for attempt in (1, 2):
+        try:
+            return render_still(art_png, audio, d, xf, pal, workdir, out, brand)
+        except Exception as e:
+            log(f"Video render attempt {attempt} failed: {str(e)[:200]}")
+    log("Using the plain picture + music video so the upload still happens")
+    return render_simple(art_png, None, audio, out)

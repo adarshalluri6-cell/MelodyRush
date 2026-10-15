@@ -38,15 +38,21 @@ def light_band(path, pal, w=760, h=1080):
 
 
 def font(kind, size):
-    """kind: heavy | medium | bold. Uses nicer fonts if they were downloaded, else safe fallbacks."""
+    """kind: heavy | medium | bold | script. Uses nicer fonts if they were downloaded and are valid, else safe fallbacks."""
     order = {
-        "heavy": [FONTS / "Poppins-ExtraBold.ttf", FONTS / "Anton-Regular.ttf"],
+        "heavy": [FONTS / "Anton-Regular.ttf", FONTS / "Poppins-ExtraBold.ttf"],
         "bold": [FONTS / "Poppins-Bold.ttf", FONTS / "Anton-Regular.ttf"],
         "medium": [FONTS / "Poppins-Medium.ttf"],
+        "script": [FONTS / "KaushanScript-Regular.ttf", FONTS / "GreatVibes-Regular.ttf"],
     }[kind] + [Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"), Path("C:/Windows/Fonts/arialbd.ttf")]
+    if kind == "script":
+        order += [Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf")]
     for f in order:
-        if f.exists():
-            return ImageFont.truetype(str(f), size)
+        try:
+            if f.exists() and f.stat().st_size > 5000:      # a failed download leaves a tiny text file
+                return ImageFont.truetype(str(f), size)
+        except Exception:
+            continue
     return ImageFont.load_default()
 
 
@@ -339,7 +345,7 @@ def watermark(w, h, pal, size=92):
     return layer
 
 
-def mix_title_layer(W, H, line1, line2, sub, badge, brand, singer, pal):
+def mix_title_layer(W, H, line1, line2, sub, badge, brand, singer, pal, tagline=None, show_singer=True):
     """Premium, consistent thumbnail template: big white line, accent 'MIX 2026' line, boxed sub-tags, duration badge."""
     s = H / 720.0
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -351,7 +357,7 @@ def mix_title_layer(W, H, line1, line2, sub, badge, brand, singer, pal):
     _spaced(d, 112 * s, 44 * s, brand.upper(), font("bold", int(26 * s)), (255, 255, 255, 255), 4 * s)
     # line 1 (auto-fit, max 2 rows)
     words, size, rows = line1.upper().split(), 150, []
-    maxw = 640 * s
+    maxw = 560 * s
     while size > 50:
         f1 = font("heavy", int(size * s))
         rows, cur = [], ""
@@ -389,16 +395,193 @@ def mix_title_layer(W, H, line1, line2, sub, badge, brand, singer, pal):
     _spaced(d, 50 * s, y + 10 * s, sub, sf, (255, 255, 255, 235), 3 * s)
     d.line((50 * s, y + 46 * s, 50 * s + sw, y + 46 * s), fill=(255, 255, 255, 170), width=max(1, int(2 * s)))
     y += int(66 * s)
-    # duration badge
-    bf = font("bold", int(30 * s))
-    bw = d.textlength(badge, font=bf)
-    x0 = 50 * s
-    d.rounded_rectangle((x0, y, x0 + bw + 78 * s, y + 56 * s), int(28 * s), fill=acc + (255,))
-    cx, cy = x0 + 34 * s, y + 28 * s
-    d.ellipse((cx - 13 * s, cy - 13 * s, cx + 13 * s, cy + 13 * s), outline=(15, 15, 25, 255), width=max(2, int(2.5 * s)))
-    d.line((cx, cy, cx, cy - 8 * s), fill=(15, 15, 25, 255), width=max(2, int(2.5 * s)))
-    d.line((cx, cy, cx + 6 * s, cy + 2 * s), fill=(15, 15, 25, 255), width=max(2, int(2.5 * s)))
-    d.text((x0 + 58 * s, y + 8 * s), badge, font=bf, fill=(15, 15, 25, 255))
-    # singer tag
-    _spaced(d, 52 * s, 640 * s, singer.upper() + "   \u2022   ORIGINAL SONGS", font("medium", int(20 * s)), acc + (255,), 3 * s)
+    # optional duration badge
+    if badge:
+        bf = font("bold", int(30 * s))
+        bw = d.textlength(badge, font=bf)
+        x0 = 50 * s
+        d.rounded_rectangle((x0, y, x0 + bw + 78 * s, y + 56 * s), int(28 * s), fill=acc + (255,))
+        cx, cy = x0 + 34 * s, y + 28 * s
+        d.ellipse((cx - 13 * s, cy - 13 * s, cx + 13 * s, cy + 13 * s), outline=(15, 15, 25, 255), width=max(2, int(2.5 * s)))
+        d.line((cx, cy, cx, cy - 8 * s), fill=(15, 15, 25, 255), width=max(2, int(2.5 * s)))
+        d.line((cx, cy, cx + 6 * s, cy + 2 * s), fill=(15, 15, 25, 255), width=max(2, int(2.5 * s)))
+        d.text((x0 + 58 * s, y + 8 * s), badge, font=bf, fill=(15, 15, 25, 255))
+    y += int(66 * s) if badge else int(0)
+    # script tagline (like the premium mix channels), then optional singer tag
+    y += int(6 * s) if not badge else int(70 * s)
+    if tagline:
+        tf = font("script", int(40 * s))
+        tw = d.textlength(tagline, font=tf)
+        glow = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+        ImageDraw.Draw(glow).text((52 * s, y), tagline, font=tf, fill=tuple(pal["rgb"]) + (255,))
+        layer.alpha_composite(glow.filter(ImageFilter.GaussianBlur(7 * s)))
+        d.text((52 * s, y), tagline, font=tf, fill=tuple(pal["light"]) + (255,))
+        d.line((54 * s, y + 52 * s, 54 * s + tw * 0.9, y + 52 * s), fill=acc + (200,), width=max(1, int(2 * s)))
+    if show_singer:
+        _spaced(d, 52 * s, 676 * s, singer.upper() + "   \u2022   ORIGINAL SONGS", font("medium", int(18 * s)), acc + (255,), 3 * s)
+    return layer
+
+
+def bottom_title_layer(W, H, line1, line2, pal, brand, tagline=None):
+    """Variant C: close-up face, big centred words along the bottom."""
+    s = H / 720.0
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    acc = tuple(pal["rgb"])
+    layer.alpha_composite(emblem(int(52 * s), pal), (int(40 * s), int(28 * s)))
+    _spaced(d, 104 * s, 40 * s, brand.upper(), font("bold", int(24 * s)), (255, 255, 255, 255), 4 * s)
+    size, maxw = 170, 1160 * s
+    f1 = font("heavy", int(size * s))
+    while d.textlength(line1.upper(), font=f1) > maxw and size > 60:
+        size -= 6
+        f1 = font("heavy", int(size * s))
+    cap = f1.getbbox("H")[3] - f1.getbbox("H")[1]
+    y = int(H - cap - 150 * s)
+    x = int((W - d.textlength(line1.upper(), font=f1)) / 2)
+    _gradient_text(layer, x, y, line1.upper(), f1, (255, 255, 255), (214, 220, 232), s)
+    f2 = font("bold", int(46 * s))
+    t2 = (line2.upper() + ("   \u2022   " + tagline if tagline else ""))
+    x2 = int((W - _spaced_width(d, t2, f2, 4 * s)) / 2)
+    _spaced(d, x2, y + cap + 26 * s, t2, f2, acc + (255,), 4 * s)
+    return layer
+
+
+# ----------------------------- bar equalizer (like the premium mix channels) -----------------------------
+def render_eq(audio, start, dur, out, pal, w=780, h=170, fps=24, bars=24):
+    """Rounded glowing bars that follow the music, resting as small dots when quiet. Black background (blended with 'screen')."""
+    import subprocess
+    sr = 22050
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", str(audio), "-ac", "1",
+                          "-ar", str(sr), "-f", "f32le", "-"], capture_output=True, check=True).stdout
+    x = np.frombuffer(raw, dtype=np.float32)
+    nfr = int(dur * fps)
+    win = 2048
+    freqs = np.fft.rfftfreq(win, 1 / sr)
+    edges = np.geomspace(55, 9000, bars + 1)
+    idx = [np.where((freqs >= edges[i]) & (freqs < edges[i + 1]))[0] for i in range(bars)]
+    hann = np.hanning(win).astype(np.float32)
+    spec = np.zeros((nfr, bars), np.float32)
+    for f in range(nfr):
+        c = int((f / fps) * sr)
+        seg = x[c:c + win]
+        if len(seg) < win:
+            seg = np.pad(seg, (0, win - len(seg)))
+        m = np.abs(np.fft.rfft(seg * hann))
+        spec[f] = [m[i].mean() if len(i) else 0 for i in idx]
+    spec = np.log1p(spec * 30)
+    spec = spec * (1 + 0.55 * np.linspace(0, 1, bars))[None, :]          # lift highs a little so every bar moves
+    hi = np.percentile(spec, 97) or 1.0
+    spec = np.clip(spec / hi, 0, 1) ** 1.25
+    sm = np.zeros(bars, np.float32)
+    bw = w / bars
+    barw = bw * 0.52
+    acc = np.array(pal["rgb"], np.float32)
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(fps), "-i", "-",
+           "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", "-g", "48", str(out)]
+    pr = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    for f in range(nfr):
+        v = spec[f]
+        sm = np.where(v > sm, sm + (v - sm) * 0.75, sm + (v - sm) * 0.22)   # fast rise, slower fall = smooth
+        mask = Image.new("L", (w, h), 0)
+        dr = ImageDraw.Draw(mask)
+        for i in range(bars):
+            bh = max(barw, sm[i] * (h - 14))
+            cx = bw * (i + 0.5)
+            dr.rounded_rectangle((cx - barw / 2, h - 7 - bh, cx + barw / 2, h - 7), radius=barw / 2, fill=255)
+        glow = np.asarray(mask.filter(ImageFilter.GaussianBlur(9)), np.float32)[:, :, None] / 255.0
+        core = np.asarray(mask, np.float32)[:, :, None] / 255.0
+        frame = np.clip(core * 255 + glow * acc[None, None, :] * 0.85, 0, 255).astype(np.uint8)
+        try:
+            pr.stdin.write(frame.tobytes())
+        except BrokenPipeError:
+            break
+    pr.stdin.close()
+    if pr.wait() != 0:
+        raise RuntimeError("equalizer video failed")
+
+
+# ----------------------------- SIMPLE thumbnail text: song name + song type, two colours -----------------------------
+# (song-name colour, song-type colour) per singer: bright, clearly different from each other, never yellow
+TEXT_PAIRS = {
+    "mira": ((255, 112, 170), (120, 232, 255)),    # hot pink  + ice blue
+    "kai": ((90, 220, 255), (255, 156, 120)),      # cyan      + coral
+    "luna": ((200, 140, 255), (130, 255, 214)),    # violet    + mint
+    "jax": ((255, 150, 80), (120, 214, 255)),      # orange    + sky blue
+    "nova": ((92, 255, 205), (255, 140, 196)),     # mint      + pink
+}
+
+
+def text_pair(persona_id):
+    return TEXT_PAIRS.get(persona_id, TEXT_PAIRS["mira"])
+
+
+def _tint(c, k):
+    return tuple(int(v + (255 - v) * k) for v in c)
+
+
+def simple_title_layer(W, H, name, genre, pair, where="left"):
+    """Only two things: the song name (brush script, colour 1) and the song type (spaced capitals, colour 2)."""
+    s = H / 720.0
+    c1, c2 = pair
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    maxw = (600 if where == "left" else 1100) * s
+    words = str(name).strip().split() or ["Song"]
+    size = 190
+    while True:
+        f1 = font("script", int(size * s))
+        rows = [" ".join(words)] if where != "left" or len(words) == 1 else None
+        if rows is None:                                  # at most two rows, balanced
+            best = None
+            for k in range(1, len(words)):
+                a, b = " ".join(words[:k]), " ".join(words[k:])
+                w_ = max(d.textlength(a, font=f1), d.textlength(b, font=f1))
+                if best is None or w_ < best[0]:
+                    best = (w_, [a, b])
+            rows = best[1] if best and d.textlength(" ".join(words), font=f1) > maxw else [" ".join(words)]
+        if max(d.textlength(r, font=f1) for r in rows) <= maxw or size <= 60:
+            break
+        size -= 6
+    asc = f1.getbbox("Hg")[3] - f1.getbbox("Hg")[1]
+    lh = int(asc * 1.05)
+    gf = font("medium", int(50 * s))
+    gtxt = str(genre).upper()
+    gw = _spaced_width(d, gtxt, gf, 9 * s)
+    block_h = len(rows) * lh + int(34 * s) + int(52 * s)
+    y0 = int((H - block_h) / 2) if where == "left" else int(H - block_h - 95 * s)
+    for i, r_ in enumerate(rows):
+        rw = d.textlength(r_, font=f1)
+        x = int(60 * s) if where == "left" else int((W - rw) / 2)
+        y = y0 + i * lh
+        # soft coloured glow
+        glow = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+        ImageDraw.Draw(glow).text((x, y), r_, font=f1, fill=c1 + (255,))
+        g = glow.filter(ImageFilter.GaussianBlur(14 * s))
+        g.putalpha(g.getchannel("A").point(lambda v: int(v * 0.75)))
+        layer.alpha_composite(g)
+        # dark soft shadow so it reads on any picture
+        sh = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+        ImageDraw.Draw(sh).text((x + 4 * s, y + 6 * s), r_, font=f1, fill=(0, 0, 0, 210))
+        layer.alpha_composite(sh.filter(ImageFilter.GaussianBlur(6 * s)))
+        # letters: light tint on top fading to the full colour
+        bb = d.textbbox((x, y), r_, font=f1)
+        mask = Image.new("L", layer.size, 0)
+        ImageDraw.Draw(mask).text((x, y), r_, font=f1, fill=255)
+        top, bot = bb[1], bb[3]
+        t = np.clip((np.arange(H)[:, None] - top) / max(bot - top, 1), 0, 1)
+        col = np.zeros((H, W, 3), np.float32)
+        a_, b_ = np.array(_tint(c1, 0.55), np.float32), np.array(c1, np.float32)
+        col[:] = a_ * (1 - t[:, :, None]) + b_ * t[:, :, None]
+        fill = Image.fromarray(col.astype(np.uint8), "RGB").convert("RGBA")
+        fill.putalpha(mask)
+        layer.alpha_composite(fill)
+    gx = int(64 * s) if where == "left" else int((W - gw) / 2)
+    gy = y0 + len(rows) * lh + int(34 * s)
+    glow2 = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    _spaced(ImageDraw.Draw(glow2), gx, gy, gtxt, gf, c2 + (255,), 9 * s)
+    g2 = glow2.filter(ImageFilter.GaussianBlur(8 * s))
+    g2.putalpha(g2.getchannel("A").point(lambda v: int(v * 0.8)))
+    layer.alpha_composite(g2)
+    _spaced(d, gx + 2 * s, gy + 3 * s, gtxt, gf, (0, 0, 0, 150), 9 * s)
+    _spaced(d, gx, gy, gtxt, gf, c2 + (255,), 9 * s)
     return layer

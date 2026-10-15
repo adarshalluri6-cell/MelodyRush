@@ -225,8 +225,18 @@ def main_mix():
     log("Saved to history. Done.")
 
 
+def _safe(label, fn, *a, **k):
+    """Run a non-essential step; a failure is logged and never stops the run."""
+    try:
+        return fn(*a, **k)
+    except Exception as e:
+        log(f"(skipped: {label} failed: {type(e).__name__}: {str(e)[:200]})")
+        return None
+
+
 def main_loop():
     """Daily video: ONE song played for about an hour, with the channel intro, synced lyrics and lots of motion."""
+    import seo
     OUT.mkdir(parents=True, exist_ok=True)
     hist = brain.load_history()
     api = None
@@ -234,21 +244,22 @@ def main_loop():
         import ytapi
         api = ytapi.YT()
         log("Learning from past videos...")
-        brain.update_metrics(hist, api)
+        _safe("learning", brain.update_metrics, hist, api)
     persona, genre, hook, _ = brain.choose(hist)
     target_min = int(os.getenv("LOOP_MINUTES", "60"))
-    context = "No data (test run)." if FAKE else brain.learning_context(hist, api)
-    plan = brain.make_loop_plan(persona, genre, hook, context)
+    context = "No data (test run)." if FAKE else (_safe("learning context", brain.learning_context, hist, api) or "No data yet.")
+    research = {} if FAKE else (_safe("keyword research", seo.research, api, genre, [hook]) or {})
+    plan = brain.make_loop_plan(persona, genre, hook, context, research)
     (OUT / "plan.json").write_text(json.dumps(plan, indent=2), encoding="utf-8")
     song = plan["song"]
-    log(f"Song: {plan['song_title']} | {persona['name']} | {genre}")
+    log(f"Song: {plan['song_title']} | {persona['name']} | {genre} | keyword: {plan.get('primary_keyword')}")
 
     kaggle_res = None
     if FAKE:
-        got = fake_songs(1, seconds=20)
+        got = fake_songs(1, seconds=int(os.getenv("FAKE_SONG_SECONDS", "20")))
     else:
         import kaggle_music
-        for attempt in (1, 2):
+        for attempt in (1, 2, 3):
             try:
                 log("Making the song and the singer picture on Kaggle's free GPU...")
                 kaggle_res = kaggle_music.generate_song({
@@ -258,33 +269,47 @@ def main_loop():
                 break
             except Exception as e:
                 log(f"Kaggle attempt {attempt} failed: {str(e)[:300]}")
-                if attempt == 2:
+                if attempt == 3:
                     raise
-                time.sleep(60)
+                time.sleep(90)
         got = kaggle_res["songs"]
     segs = got[0]["segments"]
     log(f"Song ready ({len(segs)} sung phrases detected for lyric timing)")
 
     pal = fx.palette_for(persona["id"])
-    hero = media.get_singer_image(persona, plan["image_prompt"], kaggle_res.get("image") if kaggle_res else None, OUT / "singer.jpg")
+    hero = media.get_singer_image(persona, plan["image_prompt"], kaggle_res.get("image") if kaggle_res else None, OUT / "singer.jpg",
+                                  bank=brain.DATA / "heroes" / f"{persona['id']}.jpg")
     audio = OUT / "loop_audio.mp3"
-    d, offsets, total = mix.build_loop_audio(got[0]["audio"], audio, target_min * 60)
+    xf = mix.loop_xf(got[0]["audio"], want=3.0)
+    d, offsets, total = mix.build_loop_audio(got[0]["audio"], audio, target_min * 60, xf=xf)
     actual_min = max(1, round(total / 60))
     title = plan["title"].replace("[DURATION]", brain.duration_label(actual_min))[:100]
-    thumb = media.make_mix_thumbnail(hero, plan, persona["name"], OUT / "thumbnail.jpg", brain.CHANNEL_NAME, pal,
-                                     brain.badge_label(actual_min), line2="SONG 2026")
-    n = len(offsets)
-    ass = OUT / "lyrics.ass"
-    mix.write_mix_ass(ass, [song] * n, [segs] * n, [d] * n, offsets, total, plan["cta_question"], pal, brain.CHANNEL_NAME,
-                      lyric_rgb=fx.lyric_rgb(persona["id"]), loop=True)
+
+    # three simple thumbnail versions: A is uploaded; B and C are saved so you can run YouTube's Test & compare
+    thumb = None
+    for v in "ABC":
+        r = _safe(f"thumbnail {v}", media.make_simple_thumbnail, hero, plan, OUT / f"thumbnail_{v}.jpg", persona["id"], v)
+        if v == "A":
+            thumb = r
+    if thumb is None:
+        thumb = OUT / "thumbnail_A.jpg"
+        media.gradient(OUT / "thumbnail_A.jpg", [60, 60, 90])
+    (OUT / "thumbnail.jpg").write_bytes(Path(thumb).read_bytes())
+
+    # the video is just the character picture + one small sound wave + the channel intro
+    media.make_art(hero, 1920, 1080, "V").convert("RGB").save(OUT / "art.png")
     video = OUT / "video.mp4"
-    mix.render(hero, audio, ass, OUT, video, pal, brain.CHANNEL_NAME)
+    mix.render_still_safe(OUT / "art.png", audio, d, xf, pal, OUT, video, brain.CHANNEL_NAME)
+    (OUT / "art.png").unlink(missing_ok=True)
     description = brain.build_loop_description(plan, persona)
-    (OUT / "description.txt").write_text(f"{title}\n\n{description}", encoding="utf-8")
+    (OUT / "description.txt").write_text(f"{title}\n\n{description}\n\nTAGS: {', '.join(plan['tags'])}", encoding="utf-8")
     log(f"Title: {title}")
 
     if DRY_RUN or FAKE:
-        log("Dry run: not uploading. Download the 'test-output' artifact and check video.mp4 + thumbnail.jpg")
+        log("Dry run: not uploading. Download the 'test-output' artifact and check video.mp4 + thumbnail files")
+        return
+    if (OUT / "uploaded.txt").exists():
+        log("This video was already uploaded in an earlier try. Nothing more to do.")
         return
     try:
         vid = api.upload(video, title, description, plan["tags"])
@@ -292,12 +317,15 @@ def main_loop():
         log("UPLOAD FAILED. The finished video is saved in this run's Artifacts (test-output): download it and upload it "
             "in YouTube Studio with description.txt and thumbnail.jpg.")
         raise
-    api.set_thumbnail(vid, thumb)
-    api.comment(vid, plan["first_comment"])
-    api.add_to_playlist(hist, persona["id"], f"{persona['name']} - Songs", vid)
+    (OUT / "uploaded.txt").write_text(vid)
+    log(f"UPLOADED: https://youtu.be/{vid}")
+    _safe("thumbnail", api.set_thumbnail, vid, thumb)
+    _safe("first comment", api.comment, vid, plan["first_comment"])
+    _safe("playlist", api.add_to_playlist, hist, persona["id"], f"{persona['name']} - Songs", vid)
     hist["videos"].append({"id": vid, "date": dt.datetime.now(dt.timezone.utc).isoformat(), "persona": persona["id"],
-                           "genre": genre, "hook": hook, "title": title, "duration": round(total), "songs": 1})
-    brain.save_history(hist)
+                           "genre": genre, "hook": hook, "title": title, "duration": round(total), "songs": 1,
+                           "keyword": plan.get("primary_keyword"), "thumb": "A"})
+    _safe("history", brain.save_history, hist)
     log("Saved to history. Done.")
 
 

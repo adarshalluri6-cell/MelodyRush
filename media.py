@@ -68,12 +68,24 @@ def pollinations(prompt, path):
     return False
 
 
-def get_singer_image(persona, image_prompt, kaggle_img, out):
-    """The one hero picture used for the whole video (and the thumbnail). 1920x1080."""
+def get_singer_image(persona, image_prompt, kaggle_img, out, bank=None):
+    """The one hero picture used for the whole video (and the thumbnail). 1920x1080.
+    Order: Kaggle GPU image (saved to the bank) -> last good picture of this singer -> backup service -> gradient."""
     out = Path(out)
+    bank = Path(bank) if bank else None
     if kaggle_img and Path(kaggle_img).exists():
         log("Using the high-quality singer image from the Kaggle GPU")
         cover(kaggle_img, out, (1920, 1080))
+        if bank:
+            try:
+                bank.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(out, bank)
+            except Exception as e:
+                log(f"(could not save to the picture bank: {e})")
+        return str(out)
+    if bank and bank.exists():
+        log("Kaggle image missing: reusing this singer's last good picture")
+        shutil.copy(bank, out)
         return str(out)
     log("Kaggle image missing, using the backup image service (lower quality)")
     prompt = (f"professional photo of {persona['look']}, {image_prompt}, singing into a microphone, subject on the "
@@ -302,28 +314,70 @@ def build_video(bg, audio, timed, cta_question, workdir, out, hook="NEW SONG", s
     return duration
 
 
-def make_mix_thumbnail(src, plan, persona_name, out, brand, pal, badge, line2="MIX 2026"):
-    """Consistent premium template (like the successful mix channels): big words left, portrait right."""
+def make_art(src, w, h, variant="A"):
+    """Graded, shaded hero picture (no text). Same look for the thumbnail and the video background.
+    A = classic (face right, text left), B = tight close-up, brighter colour, C = close-up with text at the bottom."""
     img = Image.open(src).convert("RGB")
-    ratio = max(W / img.width, H / img.height)
+    ratio = max(w / img.width, h / img.height)
     img = img.resize((math.ceil(img.width * ratio), math.ceil(img.height * ratio)), Image.LANCZOS)
-    l, t = (img.width - W) // 2, (img.height - H) // 2
-    img = img.crop((l, t, l + W, t + H))
-    img = ImageEnhance.Color(img).enhance(0.82)
-    img = ImageEnhance.Contrast(img).enhance(1.16)
+    l, t = (img.width - w) // 2, (img.height - h) // 2
+    img = img.crop((l, t, l + w, t + h))
+    zoom, cx = {"A": (1.0, 0.5), "B": (1.32, 0.80), "C": (1.22, 0.70), "V": (1.0, 0.5)}.get(variant, (1.0, 0.5))
+    if zoom > 1.0:
+        cw, ch = w / zoom, h / zoom
+        x0 = min(max(cx * w - cw / 2, 0), w - cw)
+        y0 = min(max(0.42 * h - ch / 2, 0), h - ch)
+        img = img.crop((int(x0), int(y0), int(x0 + cw), int(y0 + ch))).resize((w, h), Image.LANCZOS)
+    sat = {"A": 0.62, "B": 0.95, "C": 0.80, "V": 0.92}.get(variant, 0.7)
+    img = ImageEnhance.Color(img).enhance(sat)
+    img = ImageEnhance.Contrast(img).enhance(1.22)
     img = ImageEnhance.Sharpness(img).enhance(1.4)
-    shade = np.zeros((H, W, 4), dtype=np.uint8)
-    xx = np.clip(0.86 - np.linspace(0, 0.86 / 0.62, W)[None, :], 0, 0.86)
-    vig = (np.sqrt(((np.linspace(-1, 1, W)[None, :]) ** 2 + (np.linspace(-1, 1, H)[:, None]) ** 2)) / 1.5) ** 2 * 0.35
-    shade[:, :, 3] = (np.clip(xx + vig, 0, 0.9) * 255).astype(np.uint8)
+    xs = np.linspace(-1, 1, w)[None, :]
+    ys = np.linspace(-1, 1, h)[:, None]
+    vig = (np.sqrt(xs ** 2 + ys ** 2) / 1.5) ** 2 * 0.35
+    if variant == "V":
+        side = np.zeros((1, 1))
+    elif variant == "C":
+        side = np.clip((ys + 0.15) / 1.15, 0, 1) ** 1.6 * 0.88 + np.zeros_like(xs)
+    else:
+        strength = 0.62 if variant == "A" else 0.50
+        side = np.clip(strength - np.linspace(0, strength / 0.62, w)[None, :], 0, strength) + np.zeros_like(ys)
+    shade = np.zeros((h, w, 4), dtype=np.uint8)
+    shade[:, :, 3] = (np.clip(side + vig, 0, 0.92) * 255).astype(np.uint8)
     shade[:, :, 0], shade[:, :, 1], shade[:, :, 2] = 4, 4, 10
-    img = Image.alpha_composite(img.convert("RGBA"), Image.fromarray(shade, "RGBA"))
-    img = Image.alpha_composite(img, fx.mix_title_layer(W, H, plan["thumbnail_line"], line2, plan["thumbnail_sub"],
-                                                        badge, brand, persona_name, pal))
-    img = img.convert("RGB")
+    return Image.alpha_composite(img.convert("RGBA"), Image.fromarray(shade, "RGBA"))
+
+
+def title_overlay(w, h, plan, persona_name, brand, pal, badge, line2="1 HOUR", variant="A", show_singer=False):
+    tagline = plan.get("thumbnail_tagline") or None
+    if variant == "C":
+        return fx.bottom_title_layer(w, h, plan["thumbnail_line"], line2, pal, brand, tagline)
+    return fx.mix_title_layer(w, h, plan["thumbnail_line"], line2, plan["thumbnail_sub"], badge, brand, persona_name, pal,
+                              tagline=tagline, show_singer=show_singer)
+
+
+def make_mix_thumbnail(src, plan, persona_name, out, brand, pal, badge, line2="1 HOUR", variant="A"):
+    """High-contrast thumbnail: big readable song name, one accent colour, close face, mood tags."""
+    img = make_art(src, W, H, variant)
+    img = Image.alpha_composite(img, title_overlay(W, H, plan, persona_name, brand, pal, badge, line2, variant)).convert("RGB")
     for q in (95, 90, 82):
         img.save(out, "JPEG", quality=q, optimize=True)
         if Path(out).stat().st_size < 1_900_000:
             break
-    log("Thumbnail OK")
+    log(f"Thumbnail {variant} OK")
+    return out
+
+
+def make_simple_thumbnail(src, plan, out, persona_id, variant="A"):
+    """Simple, clean: the character + the song name + the song type. Nothing else."""
+    img = make_art(src, W, H, variant)
+    where = "bottom" if variant == "C" else "left"
+    layer = fx.simple_title_layer(W, H, plan["song_title"], plan.get("thumbnail_tagline") or "Late Night Vibes",
+                                  fx.text_pair(persona_id), where)
+    img = Image.alpha_composite(img, layer).convert("RGB")
+    for q in (95, 90, 82):
+        img.save(out, "JPEG", quality=q, optimize=True)
+        if Path(out).stat().st_size < 1_900_000:
+            break
+    log(f"Thumbnail {variant} OK")
     return out
