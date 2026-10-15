@@ -13,10 +13,10 @@
         "likes": 2,
         "comments": 1,
         "subs": 2,
-        "avg_view_pct": 15.310000000000002,
-        "minutes": 47
+        "avg_view_pct": 16.7,
+        "minutes": 61
       },
-      "score": 4.7623
+      "score": 4.6023
     },
     {
       "id": "tC5DfWUIrJM",
@@ -27,14 +27,14 @@
       "title": "She caught him lying and did this instead... (Lyrics)",
       "duration": 172,
       "metrics": {
-        "views": 101,
+        "views": 102,
         "likes": 2,
         "comments": 3,
         "subs": 0,
-        "avg_view_pct": 13.919999999999998,
-        "minutes": 14
+        "avg_view_pct": 15.289999999999997,
+        "minutes": 26
       },
-      "score": 4.4495
+      "score": 4.2554
     },
     {
       "id": "UTF8J53xu5w",
@@ -45,14 +45,14 @@
       "title": "Did We Give Up Too Soon? - Jax Calloway (Lyrics)",
       "duration": 178,
       "metrics": {
-        "views": 88,
+        "views": 92,
         "likes": 0,
         "comments": 1,
-        "subs": 0,
-        "avg_view_pct": 32.91,
-        "minutes": 18
+        "subs": 2,
+        "avg_view_pct": 26.3,
+        "minutes": 54
       },
-      "score": 4.2284
+      "score": 4.6634
     },
     {
       "id": "1bnwtjNAh8s",
@@ -64,7 +64,7 @@
       "duration": 3667,
       "songs": 1,
       "metrics": {
-        "views": 41,
+        "views": 44,
         "likes": 1,
         "comments": 1
       }
@@ -77,7 +77,12 @@
       "hook": "emotional confession",
       "title": "I Still Drive Your Way (1 Hour) | Late Night Chill Pop Song 2026 | Lyrics",
       "duration": 3625,
-      "songs": 1
+      "songs": 1,
+      "metrics": {
+        "views": 14,
+        "likes": 0,
+        "comments": 1
+      }
     },
     {
       "id": "Z-hqtKnZWUQ",
@@ -87,7 +92,24 @@
       "hook": "emotional confession",
       "title": "I Still Drive By (1 Hour) | Acoustic Pop Late Night Chill Song 2026 | Lyrics",
       "duration": 3532,
-      "songs": 1
+      "songs": 1,
+      "metrics": {
+        "views": 4,
+        "likes": 0,
+        "comments": 1
+      }
+    },
+    {
+      "id": "EGaLuVzPbGE",
+      "date": "2026-10-15T09:25:26.338524+00:00",
+      "persona": "kai",
+      "genre": "soul pop",
+      "hook": "relatable moment",
+      "title": "Past Your Street - Soul Pop Songs for Late Drives (1 Hour)",
+      "duration": 3679,
+      "songs": 1,
+      "keyword": "soul pop songs",
+      "thumb": "A"
     }
   ],
   "playlists": {
