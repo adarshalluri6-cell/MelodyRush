@@ -16,7 +16,7 @@
         "avg_view_pct": 16.94,
         "minutes": 63
       },
-      "score": 4.4258
+      "score": 4.3359
     },
     {
       "id": "tC5DfWUIrJM",
@@ -34,7 +34,7 @@
         "avg_view_pct": 16.27,
         "minutes": 44
       },
-      "score": 4.0628
+      "score": 3.9617
     },
     {
       "id": "UTF8J53xu5w",
@@ -45,14 +45,14 @@
       "title": "Did We Give Up Too Soon? - Jax Calloway (Lyrics)",
       "duration": 178,
       "metrics": {
-        "views": 92,
+        "views": 93,
         "likes": 0,
         "comments": 1,
         "subs": 2,
         "avg_view_pct": 25.670000000000005,
         "minutes": 62
       },
-      "score": 4.4094
+      "score": 4.3009
     },
     {
       "id": "1bnwtjNAh8s",
@@ -64,14 +64,14 @@
       "duration": 3667,
       "songs": 1,
       "metrics": {
-        "views": 57,
+        "views": 61,
         "likes": 1,
         "comments": 1,
         "subs": 1,
-        "avg_view_pct": 13.459999999999999,
+        "avg_view_pct": 13.11,
         "minutes": 304
       },
-      "score": 4.2493
+      "score": 4.0897
     },
     {
       "id": "UMdBEi5a_JU",
@@ -83,11 +83,14 @@
       "duration": 3625,
       "songs": 1,
       "metrics": {
-        "views": 32,
+        "views": 39,
         "likes": 0,
-        "comments": 1
+        "comments": 1,
+        "subs": 0,
+        "avg_view_pct": 9.35,
+        "minutes": 90
       },
-      "score": 4.0551
+      "score": 3.4765
     },
     {
       "id": "Z-hqtKnZWUQ",
@@ -101,8 +104,12 @@
       "metrics": {
         "views": 4,
         "likes": 0,
-        "comments": 1
-      }
+        "comments": 1,
+        "subs": 0,
+        "avg_view_pct": 1.67,
+        "minutes": 1
+      },
+      "score": 2.1556
     },
     {
       "id": "EGaLuVzPbGE",
@@ -148,6 +155,24 @@
       "duration": 3679,
       "songs": 1,
       "keyword": "dream pop best songs",
+      "thumb": "A",
+      "metrics": {
+        "views": 2,
+        "likes": 0,
+        "comments": 1
+      }
+    },
+    {
+      "id": "qHQEgMvTT3Y",
+      "date": "2026-10-17T02:52:19.093909+00:00",
+      "niche": "lofi",
+      "persona": "playlist",
+      "genre": "lofi",
+      "theme": "late night focus",
+      "title": "Lofi Study Music | Late Night Focus (12 Minutes)",
+      "duration": 719,
+      "songs": 4,
+      "keyword": "lofi study music",
       "thumb": "A"
     }
   ],
@@ -156,6 +181,7 @@
     "nova": "PLAqJptfkQLMY",
     "jax": "PLbENCPgliLcs",
     "kai": "PLN51I9c8AGHI",
-    "mira": "PLMZoBiz0wXpM"
+    "mira": "PLMZoBiz0wXpM",
+    "pl_lofi": "PLPu2IQ8tNF9s"
   }
 }
