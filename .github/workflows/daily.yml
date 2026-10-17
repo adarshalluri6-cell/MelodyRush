@@ -1,14 +1,18 @@
-name: Make and upload song video
+name: Make and upload study playlist
 
 on:
   schedule:
-    - cron: "0 11 * * *"   # starts 7 AM New York; the video goes live about 9:30-10:30 AM depending on its length
+    - cron: "0 20 * * 2,4,6"  # Tue, Thu, Sat 20:00 UTC = 4 PM New York. A 2-hour playlist takes about 3 hours to make.
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "TICK = test only (NO upload). UNTICK to upload for real. (Scheduled runs always upload.)"
+        description: "Test only, do NOT upload (leave unticked to upload for real)"
         type: boolean
-        default: true
+        default: false
+      minutes:
+        description: "Playlist length in minutes (120 = normal, use 12 for a quick test)"
+        type: string
+        default: "120"
 
 permissions:
   contents: write
@@ -17,10 +21,25 @@ concurrency:
   group: song-pipeline
   cancel-in-progress: false
 
+env:
+  YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+  YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+  YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+  KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+  KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+  KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+  CHANNEL_NAME: "MelodyRush"
+  DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+  PLAYLIST_MINUTES: ${{ github.event.inputs.minutes || '120' }}
+  MODE: "playlist"
+  MAKE_SHORTS: "false"
+
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 345
     steps:
       - uses: actions/checkout@v4
 
@@ -30,45 +49,64 @@ jobs:
 
       - name: Install FFmpeg and fonts
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          for i in 1 2 3; do sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core && break || sleep 20; done
           mkdir -p fonts
-          curl -L -o fonts/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf || true
-          curl -L -o fonts/Poppins-ExtraBold.ttf https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-ExtraBold.ttf || true
-          curl -L -o fonts/Poppins-Bold.ttf https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Bold.ttf || true
-          curl -L -o fonts/Poppins-Medium.ttf https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Medium.ttf || true
+          B=https://github.com/google/fonts/raw/main/ofl
+          for f in anton/Anton-Regular.ttf poppins/Poppins-ExtraBold.ttf poppins/Poppins-Bold.ttf poppins/Poppins-Medium.ttf dmserifdisplay/DMSerifDisplay-Regular.ttf kaushanscript/KaushanScript-Regular.ttf greatvibes/GreatVibes-Regular.ttf; do
+            n="fonts/$(basename $f)"
+            curl -fsSL --retry 4 --retry-delay 3 -o "$n" "$B/$f" || true
+            # a failed download leaves a tiny file: delete it so the code uses its safe fallback font
+            if [ -f "$n" ] && [ "$(stat -c%s "$n")" -lt 5000 ]; then rm -f "$n"; fi
+          done
+          ls -la fonts || true
 
       - name: Install Python packages
-        run: pip install -r requirements.txt
+        run: |
+          for i in 1 2 3; do pip install -r requirements.txt && break || sleep 20; done
 
-      - name: Make the song video
-        env:
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
-          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
-          CHANNEL_NAME: "MelodyRush"
-          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-          MODE: "loop"
-          LOOP_MINUTES: "60"
-          MAKE_SHORTS: "false"
+      - name: Make the video (first try)
+        id: first
+        continue-on-error: true
+        timeout-minutes: 250
         run: python main.py
 
+      - name: Wait, then try again (only if the first try failed)
+        if: ${{ steps.first.outcome == 'failure' }}
+        timeout-minutes: 85
+        run: |
+          if [ -f output/uploaded.txt ]; then
+            echo "The video was already uploaded, nothing to retry."
+            exit 0
+          fi
+          echo "First try failed. Waiting 5 minutes, then trying again from scratch."
+          sleep 300
+          python main.py
+
       - name: Save learning data
-        if: ${{ github.event.inputs.dry_run != 'true' }}
+        if: ${{ success() && env.DRY_RUN != 'true' }}
         run: |
           git config user.name "song-bot"
           git config user.email "song-bot@users.noreply.github.com"
-          git add data/history.json
+          git add data/history.json data/heroes data/seo_cache.json || true
           git commit -m "Update performance history" || echo "nothing to commit"
+          git pull --rebase || true
           git push || echo "push skipped"
 
-      - name: Save the finished files (only if a test run or something failed)
-        if: ${{ failure() || github.event.inputs.dry_run == 'true' }}
+      - name: Save the 3 thumbnail versions (for YouTube Test and compare)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: thumbnails
+          path: |
+            output/thumbnail_A.jpg
+            output/thumbnail_B.jpg
+            output/thumbnail_C.jpg
+            output/description.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Save the finished video (only if a test run or something failed)
+        if: ${{ failure() || env.DRY_RUN == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: test-output
@@ -77,4 +115,5 @@ jobs:
             output/thumbnail.jpg
             output/plan.json
             output/description.txt
+          if-no-files-found: ignore
           retention-days: 7
