@@ -424,3 +424,63 @@ def render_still_safe(art_png, audio, d, xf, pal, workdir, out, brand):
             log(f"Video render attempt {attempt} failed: {str(e)[:200]}")
     log("Using the plain picture + music video so the upload still happens")
     return render_simple(art_png, None, audio, out)
+
+
+# =====================================================================================================
+# PLAYLIST VIDEO (2-3 hours): one clean scene picture, one small sound wave, a short intro. Single pass, 15 fps.
+# =====================================================================================================
+PL_FPS = 12
+
+
+def render_playlist(art_png, audio, pal, workdir, out, brand, with_wave=True, with_intro=True):
+    workdir = Path(workdir).resolve()
+    art_png, audio, out = (str(Path(x).resolve()) for x in (art_png, audio, out))
+    total = media.probe_duration(audio)
+    T0 = time.time()
+    eq, intro = workdir / "pl_eq.mp4", workdir / "pl_intro.mp4"
+    if with_wave:
+        try:
+            log(f"Making the small sound wave for {total / 60:.0f} minutes of music...")
+            fx.render_eq(audio, 0, total, eq, pal, w=SW_W, h=SW_H, fps=PL_FPS, bars=20)
+        except Exception as e:
+            log(f"Sound wave failed ({str(e)[:120]}); continuing without it")
+            with_wave = False
+    if with_intro:
+        try:
+            fx.make_intro(intro, brand, pal, seconds=INTRO_S, fps=PL_FPS)
+        except Exception as e:
+            log(f"Intro failed ({str(e)[:120]}); continuing without it")
+            with_intro = False
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", str(PL_FPS), "-i", art_png]
+    n = 1
+    fc, last = "[0:v]format=yuv420p[base]", "base"
+    if with_wave:
+        cmd += ["-i", str(eq)]
+        fc += (f";[{last}]split[a][b];[b]crop={SW_W}:{SW_H}:{SW_X}:{SW_Y},format=gbrp[c];[{n}:v]format=gbrp[e];"
+               f"[c][e]blend=all_mode=screen:shortest=1,format=yuv420p[d];[a][d]overlay={SW_X}:{SW_Y}:shortest=1[v1]")
+        last, n = "v1", n + 1
+    if with_intro:
+        cmd += ["-i", str(intro)]
+        fc += (f";[{n}:v]format=yuva420p,fade=t=out:st=2.6:d=1.4:alpha=1[ii];"
+               f"[{last}][ii]overlay=0:0:enable='lt(t,4.0)':format=yuv420:eof_action=pass[v3]")
+        last, n = "v3", n + 1
+    fc += f";[{last}]format=yuv420p[v]"
+    cmd += ["-i", audio, "-filter_complex", fc, "-map", "[v]", "-map", f"{n}:a",
+            "-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage", "-crf", "27", "-pix_fmt", "yuv420p",
+            "-r", str(PL_FPS), "-g", str(PL_FPS * 2), "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
+            "-t", f"{total:.2f}", "-movflags", "+faststart", out]
+    run(cmd)
+    for f in (eq, intro):
+        Path(f).unlink(missing_ok=True)
+    log(f"Playlist video OK ({Path(out).stat().st_size / 1e6:.0f} MB) in {time.time() - T0:.0f}s")
+    return total
+
+
+def render_playlist_safe(art_png, audio, pal, workdir, out, brand):
+    for attempt, (w, i) in enumerate(((True, True), (False, True)), 1):
+        try:
+            return render_playlist(art_png, audio, pal, workdir, out, brand, with_wave=w, with_intro=i)
+        except Exception as e:
+            log(f"Video render attempt {attempt} failed: {str(e)[:200]}")
+    log("Using the plain picture + music video so the upload still happens")
+    return render_simple(art_png, None, audio, out)

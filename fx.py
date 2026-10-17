@@ -44,6 +44,8 @@ def font(kind, size):
         "bold": [FONTS / "Poppins-Bold.ttf", FONTS / "Anton-Regular.ttf"],
         "medium": [FONTS / "Poppins-Medium.ttf"],
         "script": [FONTS / "KaushanScript-Regular.ttf", FONTS / "GreatVibes-Regular.ttf"],
+        "serif": [FONTS / "DMSerifDisplay-Regular.ttf", FONTS / "PlayfairDisplay-SemiBold.ttf",
+                  Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf")],
     }[kind] + [Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"), Path("C:/Windows/Fonts/arialbd.ttf")]
     if kind == "script":
         order += [Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf")]
@@ -584,4 +586,56 @@ def simple_title_layer(W, H, name, genre, pair, where="left"):
     layer.alpha_composite(g2)
     _spaced(d, gx + 2 * s, gy + 3 * s, gtxt, gf, (0, 0, 0, 150), 9 * s)
     _spaced(d, gx, gy, gtxt, gf, c2 + (255,), 9 * s)
+    return layer
+
+
+# ----------------------------- playlist thumbnail text: the words people SEARCH, nothing else -----------------------------
+def playlist_title_layer(W, H, main, sub, accent, where="left"):
+    """Elegant serif main words in white + one small line in an accent colour. where: left | center | bottom."""
+    s = H / 720.0
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    words = str(main).strip().split() or ["Playlist"]
+    maxw = (560 if where == "left" else 1000) * s
+    size = 200
+    while True:
+        f1 = font("serif", int(size * s))
+        rows = [" ".join(words)]
+        if len(words) > 1 and d.textlength(rows[0], font=f1) > maxw and where == "left" or (len(words) > 2 and where == "bottom"):
+            best = None
+            for k in range(1, len(words)):
+                a, b = " ".join(words[:k]), " ".join(words[k:])
+                w_ = max(d.textlength(a, font=f1), d.textlength(b, font=f1))
+                if best is None or w_ < best[0]:
+                    best = (w_, [a, b])
+            rows = best[1]
+        if max(d.textlength(r, font=f1) for r in rows) <= maxw or size <= 70:
+            break
+        size -= 6
+    bb = f1.getbbox("Hg")
+    lh = int((bb[3] - bb[1]) * 1.08)
+    sf = font("medium", int(44 * s))
+    stxt = str(sub).upper()
+    sw = _spaced_width(d, stxt, sf, 8 * s)
+    block = len(rows) * lh + int(40 * s) + int(52 * s)
+    if where == "bottom":
+        y0 = int(H - block - 70 * s)
+    elif where == "center":
+        y0 = int(H * 0.16)
+    else:
+        y0 = int(H * 0.12)
+    for i, r_ in enumerate(rows):
+        rw = d.textlength(r_, font=f1)
+        x = int(64 * s) if where == "left" else int((W - rw) / 2)
+        y = y0 + i * lh
+        sh = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+        ImageDraw.Draw(sh).text((x + 3 * s, y + 6 * s), r_, font=f1, fill=(0, 0, 0, 200))
+        layer.alpha_composite(sh.filter(ImageFilter.GaussianBlur(7 * s)))
+        d.text((x, y), r_, font=f1, fill=(255, 255, 255, 255))
+    sx = int(68 * s) if where == "left" else int((W - sw) / 2)
+    sy = y0 + len(rows) * lh + int(40 * s)
+    sh2 = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    _spaced(ImageDraw.Draw(sh2), sx + 2 * s, sy + 3 * s, stxt, sf, (0, 0, 0, 190), 8 * s)
+    layer.alpha_composite(sh2.filter(ImageFilter.GaussianBlur(4 * s)))
+    _spaced(d, sx, sy, stxt, sf, tuple(accent) + (255,), 8 * s)
     return layer

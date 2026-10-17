@@ -55,8 +55,9 @@ for i, s in enumerate(songs):
     try:
         outdir = "/tmp/ace/out/%02d" % i
         os.makedirs(outdir, exist_ok=True)
-        want = dict(caption=s["caption"], lyrics=s["lyrics"], bpm=s.get("bpm"), duration=s["duration"],
-                    vocal_language="en", instrumental=False, thinking=False, use_cot_caption=False,
+        inst = bool(s.get("instrumental"))
+        want = dict(caption=s["caption"], lyrics="[Instrumental]" if inst else s["lyrics"], bpm=s.get("bpm"), duration=s["duration"],
+                    vocal_language="en", instrumental=inst, thinking=False, use_cot_caption=False,
                     use_cot_language=False, use_cot_metas=False, use_cot_lyrics=False)
         params = GenerationParams(**{k: v for k, v in want.items() if k in pf and v is not None})
         result = generate_music(dit, llm, params, config, save_dir=outdir)
@@ -112,10 +113,11 @@ def make_image():
             return
         pipe.to("cuda")
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config, use_karras_sigmas=True)
-        neg = ("text, watermark, logo, signature, blurry, low quality, deformed face, extra fingers, bad hands, "
-               "cartoon, 3d render, oversaturated, cropped head, multiple people")
+        neg = JOB.get("negative_prompt") or ("text, watermark, logo, signature, blurry, low quality, deformed face, extra fingers, "
+                                             "bad hands, cartoon, 3d render, oversaturated, cropped head, multiple people")
         best, best_score = None, -1
-        for i in range(3):
+        cands = []
+        for i in range(int(JOB.get("n_images", 3))):
             gen = torch.Generator("cuda").manual_seed(JOB["seed"] + i)
             img = pipe(prompt=JOB["image_prompt"], negative_prompt=neg, width=1344, height=768,
                        num_inference_steps=32, guidance_scale=5.5, generator=gen).images[0]
@@ -125,9 +127,15 @@ def make_image():
                            num_inference_steps=32, guidance_scale=5.5, generator=gen).images[0]
             edges = np.asarray(img.convert("L").filter(ImageFilter.FIND_EDGES), dtype=np.float32).mean()
             print(f"candidate {i + 1}: sharpness {edges:.1f}", flush=True)
+            cands.append((edges, img))
             if edges > best_score:
                 best, best_score = img, edges
         best.save(OUT / "singer.jpg", quality=96)
+        k = 1
+        for sc, im in sorted(cands, key=lambda t: -t[0]):
+            if im is not best and k <= 2:
+                im.save(OUT / f"alt{k}.jpg", quality=94)
+                k += 1
         if JOB.get("portrait_prompt"):
             best2, score2 = None, -1
             for i in range(2):
@@ -183,7 +191,9 @@ def main():
     except Exception:
         meta["error"] = traceback.format_exc()[-1500:]
         traceback.print_exc()
-    if meta["ok"]:
+    if meta["ok"] and JOB.get("skip_whisper"):
+        print("instrumental job: skipping lyric timing", flush=True)
+    if meta["ok"] and not JOB.get("skip_whisper"):
         try:
             (REPO / "whisper_run.py").write_text(WHISPER)
             Path("/tmp/ace/meta_songs.json").write_text(json.dumps(meta["songs"]))
@@ -208,6 +218,7 @@ def main():
             except Exception:
                 traceback.print_exc()
                 print("WHISPER failed completely: lyrics will be spread evenly", flush=True)
+    if meta["ok"]:
         make_image()
     (OUT / "meta.json").write_text(json.dumps(meta))
     if not meta["ok"]:

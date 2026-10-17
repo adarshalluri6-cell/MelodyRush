@@ -87,4 +87,5 @@ def _download(ref, outdir, run_id):
         songs = [{"i": 0, "audio": str(d / meta["audio"]), "segments": []}]
     return {"songs": songs, "audio": songs[0]["audio"], "segments": songs[0]["segments"],
             "image": str(d / "singer.jpg") if (d / "singer.jpg").exists() else None,
+            "alts": [str(d / f"alt{k}.jpg") for k in (1, 2) if (d / f"alt{k}.jpg").exists()],
             "portrait": str(d / "portrait.jpg") if (d / "portrait.jpg").exists() else None}

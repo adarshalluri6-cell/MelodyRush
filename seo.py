@@ -105,7 +105,7 @@ def analyse(rows):
             "typical_minutes": round(sorted(r["minutes"] for r in top)[len(top) // 2])}
 
 
-def research(api, genre, moods=()):
+def research(api, genre, moods=(), seeds=None):
     """Returns {} on any problem. Cached for the day so quota is only used once."""
     try:
         DATA.mkdir(exist_ok=True)
@@ -114,7 +114,7 @@ def research(api, genre, moods=()):
             c = json.loads(CACHE.read_text())
             if c.get("key") == key:
                 return c["result"]
-        seeds = [f"{genre} songs", f"{genre} music", f"{genre} playlist"] + [f"{m} songs" for m in list(moods)[:2]]
+        seeds = list(seeds) if seeds else [f"{genre} songs", f"{genre} music", f"{genre} playlist"] + [f"{m} songs" for m in list(moods)[:2]]
         sug = suggestions(seeds)
         res = {"keywords": manual_keywords() + [s for s in sug if s not in manual_keywords()]}
         if api is not None and sug:
@@ -142,9 +142,9 @@ def prompt_block(res):
     return "\n".join(out)
 
 
-def merge_tags(primary, song_title, llm_tags, res, limit=460):
+def merge_tags(primary, song_title, llm_tags, res, limit=460, lyrics=True):
     """Best tags first: primary keyword, song name, researched phrases, then the writer's tags."""
-    cands = [primary, song_title, f"{song_title} lyrics"] + (res.get("keywords", [])[:8] if res else []) \
+    cands = [primary, song_title] + ([f"{song_title} lyrics"] if lyrics else []) + (res.get("keywords", [])[:8] if res else []) \
         + list(llm_tags or []) + (res.get("common_tags", [])[:8] if res else [])
     tags, seen, total = [], set(), 0
     for t in cands:

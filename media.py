@@ -322,6 +322,8 @@ def make_art(src, w, h, variant="A"):
     img = img.resize((math.ceil(img.width * ratio), math.ceil(img.height * ratio)), Image.LANCZOS)
     l, t = (img.width - w) // 2, (img.height - h) // 2
     img = img.crop((l, t, l + w, t + h))
+    if variant in ("PA", "PB", "PC"):
+        return _scene_art(img, w, h, variant)
     zoom, cx = {"A": (1.0, 0.5), "B": (1.32, 0.80), "C": (1.22, 0.70), "V": (1.0, 0.5)}.get(variant, (1.0, 0.5))
     if zoom > 1.0:
         cw, ch = w / zoom, h / zoom
@@ -374,6 +376,42 @@ def make_simple_thumbnail(src, plan, out, persona_id, variant="A"):
     where = "bottom" if variant == "C" else "left"
     layer = fx.simple_title_layer(W, H, plan["song_title"], plan.get("thumbnail_tagline") or "Late Night Vibes",
                                   fx.text_pair(persona_id), where)
+    img = Image.alpha_composite(img, layer).convert("RGB")
+    for q in (95, 90, 82):
+        img.save(out, "JPEG", quality=q, optimize=True)
+        if Path(out).stat().st_size < 1_900_000:
+            break
+    log(f"Thumbnail {variant} OK")
+    return out
+
+
+def _scene_art(img, w, h, variant):
+    """Scene picture (no people): natural colour, slight punch, soft dark scrim where the words go."""
+    img = ImageEnhance.Color(img).enhance(1.08)
+    img = ImageEnhance.Contrast(img).enhance(1.08)
+    img = ImageEnhance.Sharpness(img).enhance(1.3)
+    xs = np.linspace(-1, 1, w)[None, :]
+    ys = np.linspace(0, 1, h)[:, None]
+    vig = (np.sqrt(xs ** 2 + (ys * 2 - 1) ** 2) / 1.6) ** 2 * 0.28
+    if variant == "PC":
+        scrim = np.clip((ys - 0.45) / 0.55, 0, 1) ** 1.4 * 0.62 + np.zeros_like(xs)
+    elif variant == "PB":
+        scrim = np.clip(1 - ys / 0.6, 0, 1) ** 1.2 * 0.55 + np.zeros_like(xs)
+    else:
+        left = np.clip(1 - (xs + 1) / 1.1, 0, 1) ** 1.3 * 0.50
+        scrim = left + np.clip(1 - ys / 0.5, 0, 1) * 0.18
+    shade = np.zeros((h, w, 4), dtype=np.uint8)
+    shade[:, :, 3] = (np.clip(scrim + vig, 0, 0.8) * 255).astype(np.uint8)
+    shade[:, :, 0], shade[:, :, 1], shade[:, :, 2] = 6, 6, 12
+    return Image.alpha_composite(img.convert("RGBA"), Image.fromarray(shade, "RGBA"))
+
+
+def make_playlist_thumbnail(src, plan, accent, out, variant="A"):
+    """Only the words people search + one small mood line, on a clean scene. Three layouts for Test & compare."""
+    v = {"A": "PA", "B": "PB", "C": "PC"}[variant]
+    where = {"A": "left", "B": "center", "C": "bottom"}[variant]
+    img = make_art(src, W, H, v)
+    layer = fx.playlist_title_layer(W, H, plan["thumb_main"], plan["thumb_sub"], accent, where)
     img = Image.alpha_composite(img, layer).convert("RGB")
     for q in (95, 90, 82):
         img.save(out, "JPEG", quality=q, optimize=True)

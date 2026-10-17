@@ -329,9 +329,124 @@ def main_loop():
     log("Saved to history. Done.")
 
 
+def _accent_palette(accent):
+    r, g, b = accent
+    return {"rgb": tuple(accent), "light": tuple(min(255, int(c * 0.5 + 128)) for c in accent),
+            "dark": tuple(int(c * 0.65) for c in accent), "hex": "0x%02X%02X%02X" % (r, g, b)}
+
+
+def main_playlist():
+    """Long instrumental study/focus playlist: researched keyword title, curated tracks, chapters, one clean scene, AI disclosure."""
+    import playlist
+    import seo
+    OUT.mkdir(parents=True, exist_ok=True)
+    hist = brain.load_history()
+    api = None
+    if not FAKE:
+        import ytapi
+        api = ytapi.YT()
+        log("Learning from past videos...")
+        _safe("learning", brain.update_metrics, hist, api)
+    niche_id, how = brain.pick(hist, "niche", [n["id"] for n in playlist.NICHES])
+    niche = playlist.niche_by_id(niche_id)
+    minutes = int(os.getenv("PLAYLIST_MINUTES", os.getenv("LOOP_MINUTES", "120")))
+    log(f"Niche: {niche['label']} ({how}), target {minutes} minutes")
+    context = "No data (test run)." if FAKE else (_safe("learning context", brain.learning_context, hist, api) or "No data yet.")
+    research = {} if FAKE else (_safe("keyword research", seo.research, api, niche["id"], (), niche["seeds"]) or {})
+    plan = playlist.make_plan(niche, minutes, research, context)
+    (OUT / "plan.json").write_text(json.dumps(plan, indent=2), encoding="utf-8")
+
+    tracks = plan["tracks"]
+    kaggle_res = None
+    if FAKE:
+        fk = fake_songs(len(tracks), seconds=int(os.getenv("FAKE_SONG_SECONDS", "25")))
+        for t, f in zip(tracks, fk):
+            t["audio"] = f["audio"]
+        alts = []
+    else:
+        import kaggle_music
+        job = {"run_id": uuid.uuid4().hex, "budget_min": min(200, 25 + 1.6 * len(tracks)), "skip_whisper": True, "n_images": 3,
+               "songs": [{k: t[k] for k in ("caption", "lyrics", "bpm", "duration", "instrumental")} for t in tracks],
+               "image_prompt": plan["image_prompt"], "negative_prompt": plan["negative_prompt"],
+               "seed": int(time.time()) % 100000}
+        for attempt in (1, 2, 3):
+            try:
+                log(f"Making {len(tracks)} instrumental tracks and the scene picture on Kaggle's free GPU...")
+                kaggle_res = kaggle_music.generate_song(job, OUT, timeout_min=290)
+                break
+            except Exception as e:
+                log(f"Kaggle attempt {attempt} failed: {str(e)[:300]}")
+                if attempt == 3:
+                    raise
+                time.sleep(90)
+        for g in kaggle_res["songs"]:
+            tracks[g["i"]]["audio"] = g["audio"]
+        alts = kaggle_res.get("alts") or []
+        tracks = [t for t in tracks if t.get("audio")]
+        log(f"{len(tracks)} tracks came back")
+
+    tracks = [t for t in tracks if t.get("audio")]
+    log("Checking every track and keeping the best ones...")
+    kept = playlist.curate(tracks, minutes * 60)
+    audio = OUT / "playlist_audio.mp3"
+    kept, durs, offsets = playlist.build_audio(kept, OUT, audio)
+    total = sum(durs)
+    actual_min = max(1, round(total / 60))
+    title = plan["title"].replace("[DURATION]", brain.duration_label(actual_min))[:100]
+    chapters = playlist.chapter_lines(kept, offsets)
+    description = playlist.build_description(plan, chapters)
+
+    scene_src = kaggle_res.get("image") if kaggle_res else None
+    bank = brain.DATA / "heroes" / f"scene_{niche['id']}.jpg"
+    hero = media.get_singer_image({"look": "a cozy study scene"}, plan["image_prompt"], scene_src, OUT / "scene.jpg", bank=bank)
+    accent = niche["accent"]
+    thumb = None
+    srcs = {"A": hero, "B": alts[0] if alts else hero, "C": alts[1] if len(alts) > 1 else hero}
+    for v in "ABC":
+        r = _safe(f"thumbnail {v}", media.make_playlist_thumbnail, srcs[v], plan, accent, OUT / f"thumbnail_{v}.jpg", v)
+        if r is None and v != "A":
+            r = _safe(f"thumbnail {v} (same picture)", media.make_playlist_thumbnail, hero, plan, accent, OUT / f"thumbnail_{v}.jpg", v)
+        if v == "A":
+            thumb = r
+    if thumb is None:
+        thumb = OUT / "thumbnail_A.jpg"
+        media.gradient(thumb, [60, 60, 90])
+    (OUT / "thumbnail.jpg").write_bytes(Path(thumb).read_bytes())
+
+    media.make_art(hero, 1920, 1080, "V").convert("RGB").save(OUT / "art.png")
+    video = OUT / "video.mp4"
+    mix.render_playlist_safe(OUT / "art.png", audio, _accent_palette(accent), OUT, video, brain.CHANNEL_NAME)
+    (OUT / "art.png").unlink(missing_ok=True)
+    (OUT / "description.txt").write_text(f"{title}\n\n{description}\n\nTAGS: {', '.join(plan['tags'])}", encoding="utf-8")
+    log(f"Title: {title}")
+
+    if DRY_RUN or FAKE:
+        log("Dry run: not uploading. Download the 'test-output' artifact and check video.mp4 + thumbnail files")
+        return
+    if (OUT / "uploaded.txt").exists():
+        log("This video was already uploaded in an earlier try. Nothing more to do.")
+        return
+    try:
+        vid = api.upload(video, title, description, plan["tags"])
+    except Exception:
+        log("UPLOAD FAILED. The finished video is saved in this run's Artifacts (test-output): download it and upload it "
+            "in YouTube Studio with description.txt and thumbnail.jpg.")
+        raise
+    (OUT / "uploaded.txt").write_text(vid)
+    log(f"UPLOADED: https://youtu.be/{vid}")
+    _safe("thumbnail", api.set_thumbnail, vid, thumb)
+    _safe("first comment", api.comment, vid, plan["first_comment"])
+    _safe("playlist", api.add_to_playlist, hist, "pl_" + niche["id"], f"{niche['label'].title()} Playlists", vid)
+    hist["videos"].append({"id": vid, "date": dt.datetime.now(dt.timezone.utc).isoformat(), "niche": niche["id"],
+                           "persona": "playlist", "genre": niche["id"], "theme": plan["theme"], "title": title,
+                           "duration": round(total), "songs": len(kept), "keyword": plan.get("primary_keyword"), "thumb": "A"})
+    _safe("history", brain.save_history, hist)
+    log("Saved to history. Done.")
+
+
 if __name__ == "__main__":
     try:
-        {"song": main, "mix": main_mix}.get(os.getenv("MODE", "loop").strip().lower(), main_loop)()
+        {"song": main, "mix": main_mix, "loop": main_loop}.get(os.getenv("MODE", "playlist").strip().lower(), main_playlist)()
     except Exception as e:
         log(f"FAILED: {type(e).__name__}: {e}")
         sys.exit(1)
