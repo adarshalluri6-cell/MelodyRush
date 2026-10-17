@@ -16,7 +16,7 @@
         "avg_view_pct": 16.94,
         "minutes": 63
       },
-      "score": 4.3359
+      "score": 4.2418
     },
     {
       "id": "tC5DfWUIrJM",
@@ -34,7 +34,7 @@
         "avg_view_pct": 16.27,
         "minutes": 44
       },
-      "score": 3.9617
+      "score": 3.8573
     },
     {
       "id": "UTF8J53xu5w",
@@ -52,7 +52,7 @@
         "avg_view_pct": 25.670000000000005,
         "minutes": 62
       },
-      "score": 4.3009
+      "score": 4.1829
     },
     {
       "id": "1bnwtjNAh8s",
@@ -64,14 +64,14 @@
       "duration": 3667,
       "songs": 1,
       "metrics": {
-        "views": 61,
+        "views": 63,
         "likes": 1,
         "comments": 1,
         "subs": 1,
-        "avg_view_pct": 13.11,
-        "minutes": 304
+        "avg_view_pct": 14.77,
+        "minutes": 370
       },
-      "score": 4.0897
+      "score": 3.9548
     },
     {
       "id": "UMdBEi5a_JU",
@@ -83,14 +83,14 @@
       "duration": 3625,
       "songs": 1,
       "metrics": {
-        "views": 39,
+        "views": 41,
         "likes": 0,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 9.35,
-        "minutes": 90
+        "avg_view_pct": 11.35,
+        "minutes": 198
       },
-      "score": 3.4765
+      "score": 3.3036
     },
     {
       "id": "Z-hqtKnZWUQ",
@@ -109,7 +109,7 @@
         "avg_view_pct": 1.67,
         "minutes": 1
       },
-      "score": 2.1556
+      "score": 2.0129
     },
     {
       "id": "EGaLuVzPbGE",
@@ -125,8 +125,12 @@
       "metrics": {
         "views": 11,
         "likes": 1,
-        "comments": 1
-      }
+        "comments": 1,
+        "subs": 0,
+        "avg_view_pct": 21.65,
+        "minutes": 132
+      },
+      "score": 3.6284
     },
     {
       "id": "ZuSGWTjv40M",
@@ -142,8 +146,12 @@
       "metrics": {
         "views": 26,
         "likes": 0,
-        "comments": 1
-      }
+        "comments": 1,
+        "subs": 0,
+        "avg_view_pct": 16.83,
+        "minutes": 262
+      },
+      "score": 3.6653
     },
     {
       "id": "CW-IypAgVao",
@@ -157,7 +165,7 @@
       "keyword": "dream pop best songs",
       "thumb": "A",
       "metrics": {
-        "views": 2,
+        "views": 4,
         "likes": 0,
         "comments": 1
       }
@@ -173,6 +181,24 @@
       "duration": 719,
       "songs": 4,
       "keyword": "lofi study music",
+      "thumb": "A",
+      "metrics": {
+        "views": 1,
+        "likes": 0,
+        "comments": 1
+      }
+    },
+    {
+      "id": "oJ0uJRGwVSI",
+      "date": "2026-10-17T21:35:22.524436+00:00",
+      "niche": "acoustic",
+      "persona": "playlist",
+      "genre": "acoustic",
+      "theme": "calm deep focus",
+      "title": "Acoustic Study Music Playlist | Calm Deep Focus (2 Hours)",
+      "duration": 7148,
+      "songs": 44,
+      "keyword": "acoustic study music playlist",
       "thumb": "A"
     }
   ],
@@ -182,6 +208,7 @@
     "jax": "PLbENCPgliLcs",
     "kai": "PLN51I9c8AGHI",
     "mira": "PLMZoBiz0wXpM",
-    "pl_lofi": "PLPu2IQ8tNF9s"
+    "pl_lofi": "PLPu2IQ8tNF9s",
+    "pl_acoustic": "PLHaubeY2g2Tw"
   }
 }
