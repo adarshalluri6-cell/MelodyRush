@@ -16,7 +16,7 @@
         "avg_view_pct": 16.94,
         "minutes": 63
       },
-      "score": 4.2418
+      "score": 3.9348
     },
     {
       "id": "tC5DfWUIrJM",
@@ -34,7 +34,7 @@
         "avg_view_pct": 16.27,
         "minutes": 44
       },
-      "score": 3.8573
+      "score": 3.5256
     },
     {
       "id": "UTF8J53xu5w",
@@ -45,14 +45,14 @@
       "title": "Did We Give Up Too Soon? - Jax Calloway (Lyrics)",
       "duration": 178,
       "metrics": {
-        "views": 93,
+        "views": 94,
         "likes": 0,
         "comments": 1,
         "subs": 2,
-        "avg_view_pct": 25.670000000000005,
+        "avg_view_pct": 25.55,
         "minutes": 62
       },
-      "score": 4.1829
+      "score": 3.8233
     },
     {
       "id": "1bnwtjNAh8s",
@@ -64,14 +64,14 @@
       "duration": 3667,
       "songs": 1,
       "metrics": {
-        "views": 63,
-        "likes": 1,
+        "views": 65,
+        "likes": 2,
         "comments": 1,
         "subs": 1,
-        "avg_view_pct": 14.77,
+        "avg_view_pct": 14.42,
         "minutes": 370
       },
-      "score": 3.9548
+      "score": 3.6032
     },
     {
       "id": "UMdBEi5a_JU",
@@ -83,14 +83,14 @@
       "duration": 3625,
       "songs": 1,
       "metrics": {
-        "views": 41,
-        "likes": 0,
+        "views": 43,
+        "likes": 1,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 11.35,
-        "minutes": 198
+        "avg_view_pct": 10.72,
+        "minutes": 233
       },
-      "score": 3.3036
+      "score": 2.937
     },
     {
       "id": "Z-hqtKnZWUQ",
@@ -102,14 +102,14 @@
       "duration": 3532,
       "songs": 1,
       "metrics": {
-        "views": 4,
+        "views": 5,
         "likes": 0,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 1.67,
+        "avg_view_pct": 0.84,
         "minutes": 1
       },
-      "score": 2.0129
+      "score": 1.7939
     },
     {
       "id": "EGaLuVzPbGE",
@@ -123,14 +123,14 @@
       "keyword": "soul pop songs",
       "thumb": "A",
       "metrics": {
-        "views": 11,
+        "views": 12,
         "likes": 1,
         "comments": 1,
         "subs": 0,
         "avg_view_pct": 21.65,
         "minutes": 132
       },
-      "score": 3.6284
+      "score": 3.088
     },
     {
       "id": "ZuSGWTjv40M",
@@ -144,14 +144,14 @@
       "keyword": "chill pop music for studying",
       "thumb": "A",
       "metrics": {
-        "views": 26,
-        "likes": 0,
+        "views": 27,
+        "likes": 1,
         "comments": 1,
         "subs": 0,
         "avg_view_pct": 16.83,
         "minutes": 262
       },
-      "score": 3.6653
+      "score": 3.236
     },
     {
       "id": "CW-IypAgVao",
@@ -167,8 +167,12 @@
       "metrics": {
         "views": 4,
         "likes": 0,
-        "comments": 1
-      }
+        "comments": 1,
+        "subs": 0,
+        "avg_view_pct": 22.17,
+        "minutes": 54
+      },
+      "score": 2.1838
     },
     {
       "id": "qHQEgMvTT3Y",
@@ -183,10 +187,14 @@
       "keyword": "lofi study music",
       "thumb": "A",
       "metrics": {
-        "views": 1,
+        "views": 2,
         "likes": 0,
-        "comments": 1
-      }
+        "comments": 1,
+        "subs": 0,
+        "avg_view_pct": 2.93,
+        "minutes": 0
+      },
+      "score": 1.6736
     },
     {
       "id": "oJ0uJRGwVSI",
@@ -199,6 +207,28 @@
       "duration": 7148,
       "songs": 44,
       "keyword": "acoustic study music playlist",
+      "thumb": "A",
+      "metrics": {
+        "views": 15,
+        "likes": 0,
+        "comments": 1,
+        "subs": 0,
+        "avg_view_pct": 11.92,
+        "minutes": 156
+      },
+      "score": 3.1855
+    },
+    {
+      "id": "LlvoSMx83Cg",
+      "date": "2026-10-20T21:35:20.874693+00:00",
+      "niche": "piano",
+      "persona": "playlist",
+      "genre": "piano",
+      "theme": "quiet study session",
+      "title": "Soft Piano Music for Concentration | Quiet Study (2 Hours)",
+      "duration": 7068,
+      "songs": 42,
+      "keyword": "soft piano music for concentration",
       "thumb": "A"
     }
   ],
@@ -209,6 +239,7 @@
     "kai": "PLN51I9c8AGHI",
     "mira": "PLMZoBiz0wXpM",
     "pl_lofi": "PLPu2IQ8tNF9s",
-    "pl_acoustic": "PLHaubeY2g2Tw"
+    "pl_acoustic": "PLHaubeY2g2Tw",
+    "pl_piano": "PLM7iwWNqXoHk"
   }
 }
