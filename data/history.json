@@ -9,14 +9,14 @@
       "title": "Some mistakes are worth repeating: Before We Crash (Lyrics)",
       "duration": 182,
       "metrics": {
-        "views": 137,
+        "views": 138,
         "likes": 2,
         "comments": 1,
         "subs": 2,
         "avg_view_pct": 16.94,
         "minutes": 63
       },
-      "score": 3.9348
+      "score": 3.7822
     },
     {
       "id": "tC5DfWUIrJM",
@@ -34,7 +34,7 @@
         "avg_view_pct": 16.27,
         "minutes": 44
       },
-      "score": 3.5256
+      "score": 3.3604
     },
     {
       "id": "UTF8J53xu5w",
@@ -45,14 +45,14 @@
       "title": "Did We Give Up Too Soon? - Jax Calloway (Lyrics)",
       "duration": 178,
       "metrics": {
-        "views": 94,
+        "views": 96,
         "likes": 0,
         "comments": 1,
         "subs": 2,
-        "avg_view_pct": 25.55,
+        "avg_view_pct": 25.27,
         "minutes": 62
       },
-      "score": 3.8233
+      "score": 3.6553
     },
     {
       "id": "1bnwtjNAh8s",
@@ -64,14 +64,14 @@
       "duration": 3667,
       "songs": 1,
       "metrics": {
-        "views": 65,
+        "views": 70,
         "likes": 2,
         "comments": 1,
         "subs": 1,
-        "avg_view_pct": 14.42,
-        "minutes": 370
+        "avg_view_pct": 16.41,
+        "minutes": 431
       },
-      "score": 3.6032
+      "score": 3.4408
     },
     {
       "id": "UMdBEi5a_JU",
@@ -83,14 +83,14 @@
       "duration": 3625,
       "songs": 1,
       "metrics": {
-        "views": 43,
+        "views": 53,
         "likes": 1,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 10.72,
-        "minutes": 233
+        "avg_view_pct": 11.24,
+        "minutes": 258
       },
-      "score": 2.937
+      "score": 2.7527
     },
     {
       "id": "Z-hqtKnZWUQ",
@@ -102,14 +102,14 @@
       "duration": 3532,
       "songs": 1,
       "metrics": {
-        "views": 5,
+        "views": 7,
         "likes": 0,
         "comments": 1,
         "subs": 0,
         "avg_view_pct": 0.84,
         "minutes": 1
       },
-      "score": 1.7939
+      "score": 1.8218
     },
     {
       "id": "EGaLuVzPbGE",
@@ -123,14 +123,14 @@
       "keyword": "soul pop songs",
       "thumb": "A",
       "metrics": {
-        "views": 12,
+        "views": 13,
         "likes": 1,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 21.65,
-        "minutes": 132
+        "avg_view_pct": 22.67,
+        "minutes": 152
       },
-      "score": 3.088
+      "score": 2.9495
     },
     {
       "id": "ZuSGWTjv40M",
@@ -144,14 +144,14 @@
       "keyword": "chill pop music for studying",
       "thumb": "A",
       "metrics": {
-        "views": 27,
+        "views": 28,
         "likes": 1,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 16.83,
-        "minutes": 262
+        "avg_view_pct": 18.83,
+        "minutes": 304
       },
-      "score": 3.236
+      "score": 2.9951
     },
     {
       "id": "CW-IypAgVao",
@@ -172,7 +172,7 @@
         "avg_view_pct": 22.17,
         "minutes": 54
       },
-      "score": 2.1838
+      "score": 2.0206
     },
     {
       "id": "qHQEgMvTT3Y",
@@ -187,14 +187,14 @@
       "keyword": "lofi study music",
       "thumb": "A",
       "metrics": {
-        "views": 2,
+        "views": 3,
         "likes": 0,
         "comments": 1,
         "subs": 0,
         "avg_view_pct": 2.93,
         "minutes": 0
       },
-      "score": 1.6736
+      "score": 1.6652
     },
     {
       "id": "oJ0uJRGwVSI",
@@ -209,14 +209,14 @@
       "keyword": "acoustic study music playlist",
       "thumb": "A",
       "metrics": {
-        "views": 15,
+        "views": 17,
         "likes": 0,
         "comments": 1,
         "subs": 0,
         "avg_view_pct": 11.92,
         "minutes": 156
       },
-      "score": 3.1855
+      "score": 2.8686
     },
     {
       "id": "LlvoSMx83Cg",
@@ -229,6 +229,27 @@
       "duration": 7068,
       "songs": 42,
       "keyword": "soft piano music for concentration",
+      "thumb": "A",
+      "metrics": {
+        "views": 15,
+        "likes": 0,
+        "comments": 1,
+        "subs": 0,
+        "avg_view_pct": 17.7,
+        "minutes": 187
+      }
+    },
+    {
+      "id": "ZI6YaZwrfiQ",
+      "date": "2026-10-22T21:54:16.148242+00:00",
+      "niche": "focus",
+      "persona": "playlist",
+      "genre": "focus",
+      "theme": "calm productivity flow",
+      "title": "Deep Focus Music for Studying | Calm Flow State (2 Hours)",
+      "duration": 7212,
+      "songs": 43,
+      "keyword": "deep focus music for studying",
       "thumb": "A"
     }
   ],
@@ -240,6 +261,7 @@
     "mira": "PLMZoBiz0wXpM",
     "pl_lofi": "PLPu2IQ8tNF9s",
     "pl_acoustic": "PLHaubeY2g2Tw",
-    "pl_piano": "PLM7iwWNqXoHk"
+    "pl_piano": "PLM7iwWNqXoHk",
+    "pl_focus": "PLKknuFbThJfI"
   }
 }
