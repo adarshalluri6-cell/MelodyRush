@@ -64,14 +64,14 @@
       "duration": 3667,
       "songs": 1,
       "metrics": {
-        "views": 102,
+        "views": 103,
         "likes": 2,
         "comments": 1,
         "subs": 1,
-        "avg_view_pct": 12.78,
-        "minutes": 562
+        "avg_view_pct": 11.78,
+        "minutes": 576
       },
-      "score": 3.1836
+      "score": 3.1734
     },
     {
       "id": "UMdBEi5a_JU",
@@ -87,10 +87,10 @@
         "likes": 1,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 14.2,
-        "minutes": 540
+        "avg_view_pct": 13.239999999999998,
+        "minutes": 480
       },
-      "score": 2.4513
+      "score": 2.4369
     },
     {
       "id": "Z-hqtKnZWUQ",
@@ -102,14 +102,14 @@
       "duration": 3532,
       "songs": 1,
       "metrics": {
-        "views": 11,
+        "views": 12,
         "likes": 0,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 0.28,
-        "minutes": 1
+        "avg_view_pct": 6.47,
+        "minutes": 26
       },
-      "score": 1.784
+      "score": 1.9161
     },
     {
       "id": "EGaLuVzPbGE",
@@ -123,14 +123,14 @@
       "keyword": "soul pop songs",
       "thumb": "A",
       "metrics": {
-        "views": 26,
+        "views": 28,
         "likes": 1,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 12.6,
+        "avg_view_pct": 11.59,
         "minutes": 177
       },
-      "score": 2.4696
+      "score": 2.4153
     },
     {
       "id": "ZuSGWTjv40M",
@@ -144,14 +144,14 @@
       "keyword": "chill pop music for studying",
       "thumb": "A",
       "metrics": {
-        "views": 39,
+        "views": 40,
         "likes": 1,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 16.37,
-        "minutes": 362
+        "avg_view_pct": 18.21,
+        "minutes": 414
       },
-      "score": 2.3973
+      "score": 2.4231
     },
     {
       "id": "CW-IypAgVao",
@@ -172,7 +172,7 @@
         "avg_view_pct": 17.74,
         "minutes": 54
       },
-      "score": 1.7839
+      "score": 1.7715
     },
     {
       "id": "qHQEgMvTT3Y",
@@ -191,10 +191,10 @@
         "likes": 0,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 31.8,
-        "minutes": 49
+        "avg_view_pct": 30.06,
+        "minutes": 50
       },
-      "score": 2.4554
+      "score": 2.3791
     },
     {
       "id": "oJ0uJRGwVSI",
@@ -209,14 +209,14 @@
       "keyword": "acoustic study music playlist",
       "thumb": "A",
       "metrics": {
-        "views": 17,
+        "views": 18,
         "likes": 0,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 11.92,
-        "minutes": 156
+        "avg_view_pct": 12.39,
+        "minutes": 177
       },
-      "score": 2.2634
+      "score": 2.2146
     },
     {
       "id": "LlvoSMx83Cg",
@@ -238,7 +238,7 @@
         "avg_view_pct": 25.929999999999996,
         "minutes": 305
       },
-      "score": 2.5303
+      "score": 2.4126
     },
     {
       "id": "ZI6YaZwrfiQ",
@@ -253,14 +253,14 @@
       "keyword": "deep focus music for studying",
       "thumb": "A",
       "metrics": {
-        "views": 39,
+        "views": 40,
         "likes": 0,
         "comments": 1,
         "subs": 0,
-        "avg_view_pct": 13.58,
+        "avg_view_pct": 11.64,
         "minutes": 196
       },
-      "score": 2.7089
+      "score": 2.4751
     },
     {
       "id": "FxzMhfb1hVg",
@@ -275,14 +275,14 @@
       "keyword": "coffee jazz study music",
       "thumb": "A",
       "metrics": {
-        "views": 3,
+        "views": 4,
         "likes": 0,
         "comments": 1,
         "subs": 0,
         "avg_view_pct": 8.56,
         "minutes": 20
       },
-      "score": 1.802
+      "score": 1.7832
     },
     {
       "id": "yyKje09hBDc",
@@ -295,6 +295,24 @@
       "duration": 7089,
       "songs": 43,
       "keyword": "deep focus music for studying",
+      "thumb": "A",
+      "metrics": {
+        "views": 0,
+        "likes": 0,
+        "comments": 1
+      }
+    },
+    {
+      "id": "w06YIE16NGk",
+      "date": "2026-10-31T21:50:57.717216+00:00",
+      "niche": "focus",
+      "persona": "playlist",
+      "genre": "focus",
+      "theme": "calm productivity flow",
+      "title": "Deep Focus Music for Work | Calm Flow State (2 Hours)",
+      "duration": 7214,
+      "songs": 43,
+      "keyword": "deep focus music for work",
       "thumb": "A"
     }
   ],
